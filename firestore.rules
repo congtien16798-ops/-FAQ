@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return (
+        isSignedIn() && (
+          request.auth.token.email == "congtien16798@gmail.com" ||
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        )
+      );
+    }
+
+    // Site Config: Global portal theme and customization settings
+    // Readable and writable so that theme customizations in design mode persist seamlessly
+    match /site_config/{configId} {
+      allow read, write: if true;
+    }
+
+    // FAQs: Frequently Asked Questions collection
+    match /faqs/{faqId} {
+      allow read, write: if true;
+    }
+
+    // Documents / Downloads repository
+    match /documents/{docId} {
+      allow read, write: if true;
+    }
+
+    // 1:1 Quick Student Inquiries
+    match /inquiries/{inquiryId} {
+      allow create: if request.resource.data.keys().hasAll(['studentId', 'name', 'content', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.studentId is string
+        && request.resource.data.name is string
+        && request.resource.data.content is string
+        && request.resource.data.status == 'pending';
+      allow read, list, update, delete: if true;
+    }
+
+    // Schedules: Academic Calendar for Korean Language Institute
+    match /schedules/{scheduleId} {
+      allow read, write: if true;
+    }
+
+    // Admins collection
+    match /admins/{uid} {
+      allow read, write: if true;
+    }
+  }
+}

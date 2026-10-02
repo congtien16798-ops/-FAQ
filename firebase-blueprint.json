@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "SiteConfig",
+      "description": "Theme and portal customization settings for the Keimyung University Guide portal",
+      "type": "object",
+      "properties": {
+        "mainColor": { "type": "string", "description": "Primary brand color in hex" },
+        "accentColor": { "type": "string", "description": "Secondary accent color in hex" },
+        "warnColor": { "type": "string", "description": "Warning and notification accent color in hex" },
+        "heroTitle": { "type": "string", "description": "Main portal banner title" },
+        "heroSubtitle": { "type": "string", "description": "Subtitle describing the portal services" },
+        "searchPlaceholder": { "type": "string", "description": "Placeholder text inside the search bar" },
+        "bgType": { "type": "string", "enum": ["color", "campus"], "description": "Hero banner background style" },
+        "logoType": { "type": "string", "enum": ["none", "text", "image", "symbol_text"], "description": "Logo presentation format" },
+        "logoText": { "type": "string", "description": "Custom logo text" },
+        "logoSubText": { "type": "string", "description": "Sub English wordmark text" },
+        "logoTextColor": { "type": "string", "description": "Custom logo text color hex" },
+        "logoFontWeight": { "type": "string", "enum": ["medium", "bold", "black"], "description": "Font weight for text logo" },
+        "logoSymbolIcon": { "type": "string", "description": "Symbol icon identifier" },
+        "logoUrl": { "type": "string", "description": "URL or data string of custom logo" },
+        "logoHeight": { "type": "number", "description": "Height in pixels for the brand logo" },
+        "popupEnabled": { "type": "boolean", "description": "Whether notice popup is active" },
+        "popupTitle": { "type": "string", "description": "Notice popup title" },
+        "popupBadge": { "type": "string", "description": "Notice popup badge text" },
+        "popupContent": { "type": "string", "description": "Notice popup body content" },
+        "popupColor": { "type": "string", "description": "Notice popup header theme color" },
+        "popupStyle": { "type": "string", "enum": ["modal", "banner"], "description": "Notice popup layout style" },
+        "popupIcon": { "type": "string", "enum": ["bell", "alert", "calendar", "info"], "description": "Notice popup icon" },
+        "popupLinkText": { "type": "string", "description": "Notice popup link button text" },
+        "popupLinkTab": { "type": "string", "description": "Notice popup target tab" },
+        "searchButtonText": { "type": "string", "description": "Search button text" },
+        "searchButtonSize": { "type": "string", "enum": ["sm", "md", "lg"], "description": "Search button size" },
+        "searchButtonShape": { "type": "string", "enum": ["square", "rounded", "pill"], "description": "Search button shape style" },
+        "searchButtonRadius": { "type": "number", "description": "Search button corner radius" },
+        "searchButtonColor": { "type": "string", "description": "Search button custom color" },
+        "searchButtonShowIcon": { "type": "boolean", "description": "Whether to display icon in search button" },
+        "searchButtonIconType": { "type": "string", "enum": ["search", "arrow", "sparkles"], "description": "Search button icon type" },
+        "searchBarRadius": { "type": "number", "description": "Search input frame border radius" },
+        "fontSize": { "type": "string", "enum": ["standard", "large"], "description": "Portal base font scale" },
+        "borderRadius": { "type": "number", "description": "Border radius style: 0, 6, or 12px" },
+        "officeHours": { "type": "string", "description": "Administrative office hours text" },
+        "phone": { "type": "string", "description": "Administration contact telephone number" },
+        "email": { "type": "string", "description": "Administration contact email" },
+        "location": { "type": "string", "description": "Office physical location address" },
+        "showInstagram": { "type": "boolean", "description": "Whether to display Instagram link icon" },
+        "showYoutube": { "type": "boolean", "description": "Whether to display YouTube link icon" },
+        "instagramUrl": { "type": "string", "description": "Custom Instagram profile URL" },
+        "youtubeUrl": { "type": "string", "description": "Custom YouTube channel URL" },
+        "showRelatedSites": { "type": "boolean", "description": "Whether to display related websites in footer" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" },
+        "updatedBy": { "type": "string", "description": "UID of admin who updated the configuration" }
+      },
+      "required": ["mainColor", "accentColor", "heroTitle", "heroSubtitle", "officeHours", "phone", "email", "location"]
+    },
+    "Faq": {
+      "title": "Faq",
+      "description": "Frequently Asked Questions for international students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique FAQ identifier" },
+        "category": { "type": "string", "enum": ["attendance", "visa", "dormitory", "admin", "life"], "description": "FAQ topic category" },
+        "title": { "type": "string", "maxLength": 300, "description": "Question title" },
+        "content": { "type": "string", "maxLength": 10000, "description": "Rich text formatted answer content" },
+        "pinned": { "type": "boolean", "description": "Whether notice is pinned to top" },
+        "views": { "type": "number", "description": "View count" },
+        "imageUrl": { "type": "string", "description": "Optional attached reference image URL" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last modified timestamp" },
+        "authorId": { "type": "string", "description": "Author UID" }
+      },
+      "required": ["category", "title", "content", "pinned", "createdAt", "updatedAt"]
+    },
+    "DocumentItem": {
+      "title": "DocumentItem",
+      "description": "Downloadable forms and administrative reference documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique document identifier" },
+        "category": { "type": "string", "description": "Form category" },
+        "title": { "type": "string", "maxLength": 200, "description": "Document title" },
+        "description": { "type": "string", "maxLength": 500, "description": "Document description and instructions" },
+        "fileType": { "type": "string", "enum": ["pdf", "hwp", "docx", "xlsx"], "description": "File format extension" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "fileSize": { "type": "string", "description": "Human readable file size" },
+        "downloadUrl": { "type": "string", "description": "Download link URL" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last updated timestamp" }
+      },
+      "required": ["category", "title", "fileType", "fileName", "downloadUrl", "createdAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "1:1 Quick student inquiry submitted without login",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique inquiry identifier" },
+        "studentId": { "type": "string", "pattern": "^[0-9]{8,10}$", "description": "Student registration number 8-10 digits" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 50, "description": "Student full legal name" },
+        "content": { "type": "string", "minLength": 10, "maxLength": 1000, "description": "Inquiry message content" },
+        "status": { "type": "string", "enum": ["pending", "resolved"], "description": "Inquiry processing status" },
+        "adminNote": { "type": "string", "maxLength": 500, "description": "Internal administrative note" },
+        "createdAt": { "type": "string", "description": "Submission timestamp" },
+        "updatedAt": { "type": "string", "description": "Status update timestamp" }
+      },
+      "required": ["studentId", "name", "content", "status", "createdAt", "updatedAt"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrator user profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Admin email address" },
+        "role": { "type": "string", "enum": ["admin"], "description": "Admin role designation" },
+        "createdAt": { "type": "string", "description": "Registration timestamp" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/site_config/{configId}": {
+      "schema": { "$ref": "#/entities/SiteConfig" },
+      "description": "Global website configuration and customizer settings"
+    },
+    "/faqs/{faqId}": {
+      "schema": { "$ref": "#/entities/Faq" },
+      "description": "Collection of frequently asked questions and guides"
+    },
+    "/documents/{docId}": {
+      "schema": { "$ref": "#/entities/DocumentItem" },
+      "description": "Downloadable forms and documents repository"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "1:1 Quick inquiries submitted by students"
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Authorized administrators collection"
+    }
+  }
+}

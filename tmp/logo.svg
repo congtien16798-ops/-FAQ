@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 688 224" width="688" height="224">
+  <rect width="688" height="224" fill="#ffffff"/>
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@900&amp;display=swap');
+      .korean {
+        font-family: 'NanumGothic', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+        font-weight: 900;
+        font-size: 110px;
+        fill: #004ea1;
+        letter-spacing: -2px;
+      }
+      .english {
+        font-family: 'Times New Roman', 'DejaVu Serif', serif;
+        font-weight: bold;
+        font-size: 46px;
+        fill: #004ea1;
+        letter-spacing: 5px;
+      }
+    </style>
+  </defs>
+  <text x="344" y="112" text-anchor="middle" class="korean">계명대학교</text>
+  <text x="344" y="180" text-anchor="middle" class="english">KEIMYUNG UNIVERSITY</text>
+</svg>

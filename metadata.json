@@ -1,0 +1,8 @@
+{
+  "name": "계명대학교 한국어학당 유학생 가이드",
+  "description": "출결, 비자, 기숙사, 행정 서식 안내 및 1:1 빠른 문의를 지원하는 계명대학교 한국어학당 유학생 전용 가이드 포털",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
