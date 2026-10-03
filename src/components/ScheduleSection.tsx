@@ -417,9 +417,9 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                             )}
                           </div>
 
-                          <div className="text-xs sm:text-sm font-bold text-gray-900 sm:mt-1">
+                          <div className="text-xs sm:text-sm font-bold text-gray-900 sm:mt-1 font-sans tracking-normal">
                             {ev.startDate}
-                            {isMultiDay && <span className="text-gray-400 font-normal"> ~ {ev.endDate}</span>}
+                            {isMultiDay && <span className="text-gray-400 font-normal font-sans"> ~ {ev.endDate}</span>}
                           </div>
                         </div>
 
@@ -758,7 +758,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
               <div className="flex items-center gap-2 text-gray-700">
                 <CalendarIcon className="w-4 h-4 text-[#1A3B6B] shrink-0" />
                 <span className="font-semibold text-gray-900">일정 기간:</span>
-                <span>
+                <span className="font-sans">
                   {selectedEvent.startDate}
                   {selectedEvent.startDate !== selectedEvent.endDate && ` ~ ${selectedEvent.endDate}`}
                 </span>

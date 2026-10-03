@@ -552,7 +552,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                           >
                             <GripVertical className="w-3.5 h-3.5" />
                           </span>
-                          <span className="font-mono text-gray-500 text-[11px] w-5 text-center">
+                          <span className="text-gray-500 text-[11px] w-5 text-center font-medium font-sans">
                             {globalIdx + 1}
                           </span>
                           <div className="flex flex-col">
@@ -597,7 +597,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                       </td>
 
                       {/* Date Range */}
-                      <td className="py-2.5 px-3 font-mono text-[11px] text-gray-700 whitespace-nowrap">
+                      <td className="py-2.5 px-3 font-sans text-[11px] font-medium text-gray-700 whitespace-nowrap">
                         <div>{ev.startDate}</div>
                         {ev.startDate !== ev.endDate && (
                           <div className="text-[10px] text-gray-400">~ {ev.endDate}</div>
@@ -719,7 +719,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <div className="py-4 space-y-3">
               <div className="bg-gray-50 rounded p-3 border border-gray-200">
                 <div className="font-bold text-gray-900 text-sm">{deleteTarget.title}</div>
-                <div className="font-mono text-xs text-gray-600 mt-1">
+                <div className="font-sans text-xs text-gray-600 mt-1 font-medium">
                   기간: {deleteTarget.startDate} {deleteTarget.startDate !== deleteTarget.endDate && `~ ${deleteTarget.endDate}`}
                 </div>
                 {deleteTarget.hidden && (

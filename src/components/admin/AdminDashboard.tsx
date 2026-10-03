@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Bot,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -49,13 +50,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   setSchedules,
   onExitAdmin,
 }) => {
-  const { user, isAdmin, signInWithGoogle, signOut, simulateAdminLogin, error: authError } = useAuth();
+  const {
+    user,
+    pendingGoogleUser,
+    isAdmin,
+    signInWithGoogle,
+    approveAndRegisterGoogleAdmin,
+    loginWithAdminEmail,
+    loginAsPrimaryAdmin,
+    signOut,
+    simulateAdminLogin,
+    error: authError,
+    clearAuthError,
+    clearPendingGoogleUser,
+  } = useAuth();
   const { isDesignMode, setIsDesignMode } = useTheme();
 
   const [activeAdminTab, setActiveAdminTab] = useState<'design' | 'faqs' | 'docs' | 'inquiries' | 'schedules' | 'chatbot' | 'admins'>('design');
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Quick email login state
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [showEmailLoginForm, setShowEmailLoginForm] = useState(false);
+
+  // Pending Google user passcode state
+  const [pendingPasscode, setPendingPasscode] = useState('');
+  const [pendingError, setPendingError] = useState(false);
+  const [isRegisteringGoogleAdmin, setIsRegisteringGoogleAdmin] = useState(false);
 
   const handlePasscodeLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +87,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setPasscodeError(true);
     } else {
       setPasscodeError(false);
+    }
+  };
+
+  const handleEmailQuickLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await loginWithAdminEmail(adminEmailInput);
+  };
+
+  const handleRegisterPendingGoogle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsRegisteringGoogleAdmin(true);
+    try {
+      const ok = await approveAndRegisterGoogleAdmin(pendingPasscode);
+      if (!ok) {
+        setPendingError(true);
+      } else {
+        setPendingError(false);
+      }
+    } finally {
+      setIsRegisteringGoogleAdmin(false);
     }
   };
 
@@ -92,9 +135,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             한국어학당 유학생 포털 관리자 전용 로그인 페이지입니다.
           </p>
 
-          {authError && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 text-xs rounded border border-red-200 text-left">
-              {authError}
+          {/* Pending Google User Authorization Form */}
+          {pendingGoogleUser && (
+            <div className="mb-5 p-4 bg-blue-50 border border-blue-200 rounded-md text-left animate-in fade-in">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[#1A3B6B] mb-1">
+                <Check className="w-4 h-4 text-emerald-600" />
+                <span>Google 계정 인증 성공</span>
+              </div>
+              <p className="text-[11px] text-gray-600 mb-3">
+                <span className="font-semibold text-gray-800">{pendingGoogleUser.email}</span> 계정으로 로그인되었습니다. 최초 1회 행정실 관리자 코드(<span className="font-mono font-bold text-[#1A3B6B]">kmu2024</span>)를 입력하시면 관리자 명단에 등록되어 즉시 접속됩니다.
+              </p>
+              <form onSubmit={handleRegisterPendingGoogle} className="space-y-2">
+                <input
+                  type="password"
+                  value={pendingPasscode}
+                  onChange={(e) => {
+                    setPendingPasscode(e.target.value);
+                    setPendingError(false);
+                  }}
+                  placeholder="행정실 관리자 코드 입력 (kmu2024)"
+                  className="w-full px-3 py-2 text-xs rounded border border-blue-300 focus:outline-none focus:border-[#1A3B6B] bg-white"
+                />
+                {pendingError && (
+                  <p className="text-[10px] text-red-600">
+                    인증코드가 올바르지 않습니다. (kmu2024 입력)
+                  </p>
+                )}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={isRegisteringGoogleAdmin}
+                    className="flex-1 py-2 bg-[#1A3B6B] hover:bg-[#122a4d] text-white text-xs font-bold rounded transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isRegisteringGoogleAdmin ? '등록 중...' : '관리자로 승인 등록 및 접속'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearPendingGoogleUser}
+                    className="px-2.5 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-600 text-xs rounded cursor-pointer"
+                  >
+                    취소
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {authError && !pendingGoogleUser && (
+            <div className="mb-5 p-3.5 bg-amber-50/90 text-amber-900 text-xs rounded-md border border-amber-300 text-left space-y-2.5 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-amber-950">
+                    {authError.includes('Identity Toolkit') || authError.includes('691355247972')
+                      ? 'Firebase Auth (Identity Toolkit API) 설정 안내'
+                      : '관리자 로그인 알림'}
+                  </div>
+                  <p className="leading-relaxed text-[11px] text-amber-800">{authError}</p>
+                </div>
+              </div>
+
+              {/* Direct Instant Action Buttons */}
+              <div className="pt-1 border-t border-amber-200/80 flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={loginAsPrimaryAdmin}
+                  className="w-full py-2 bg-[#1A3B6B] hover:bg-[#122a4d] text-white text-xs font-bold rounded shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <span>⚡ 주 관리자(congtien16798@gmail.com) 계정으로 즉시 접속</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => simulateAdminLogin('kmu2024')}
+                  className="w-full py-1.5 bg-white hover:bg-gray-50 border border-amber-300 text-gray-800 text-[11px] font-semibold rounded cursor-pointer transition-colors"
+                >
+                  행정실 코드(kmu2024)로 즉시 접속
+                </button>
+              </div>
             </div>
           )}
 
@@ -103,7 +220,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               onClick={handleGoogleLogin}
               disabled={isLoggingIn}
-              className="w-full py-2.5 px-4 rounded text-xs font-bold text-gray-800 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 shadow-2xs transition-colors disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded text-xs font-bold text-gray-800 bg-white border border-gray-300 hover:bg-gray-50 flex items-center justify-center gap-2 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -123,54 +240,96 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.37 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
                 />
               </svg>
-              <span>{isLoggingIn ? 'Google 인증 중...' : 'Google 계정으로 관리자 로그인'}</span>
+              <span>{isLoggingIn ? 'Google 인증 진행 중...' : 'Google 계정으로 관리자 로그인'}</span>
+            </button>
+
+            {/* Quick Primary Admin Button for Fast Access */}
+            <button
+              type="button"
+              onClick={loginAsPrimaryAdmin}
+              className="w-full py-2 px-3 rounded text-[11px] font-semibold text-blue-900 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <span>⚡ 주 관리자(congtien16798@gmail.com) 원클릭 접속</span>
             </button>
 
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-gray-200"></div>
-              <span className="flex-shrink mx-3 text-gray-400 text-[11px]">또는 관리자 인증코드 입력</span>
+              <span className="flex-shrink mx-3 text-gray-400 text-[11px]">또는 간편 인증코드 입력</span>
               <div className="flex-grow border-t border-gray-200"></div>
             </div>
 
             {/* Option 2: Administrative Passcode */}
             <form onSubmit={handlePasscodeLogin} className="space-y-3 text-left">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  행정실 관리자 코드 (테스트용: kmu2024)
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={passcode}
-                    onChange={(e) => {
-                      setPasscode(e.target.value);
-                      setPasscodeError(false);
-                    }}
-                    placeholder="인증코드 입력"
-                    className="w-full px-3 py-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
-                  />
-                  <KeyRound className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-2.5" />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-semibold text-gray-700">
+                    행정실 관리자 코드 (테스트용: kmu2024)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmailLoginForm(!showEmailLoginForm)}
+                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+                  >
+                    {showEmailLoginForm ? '코드 입력으로 전환' : '등록 이메일로 인증'}
+                  </button>
                 </div>
-                {passcodeError && (
-                  <p className="text-[11px] text-red-600 mt-1">
-                    인증코드가 올바르지 않습니다. (kmu2024 입력)
-                  </p>
+
+                {!showEmailLoginForm ? (
+                  <>
+                    <div className="relative">
+                      <input
+                        type="password"
+                        value={passcode}
+                        onChange={(e) => {
+                          setPasscode(e.target.value);
+                          setPasscodeError(false);
+                        }}
+                        placeholder="인증코드 입력"
+                        className="w-full px-3 py-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
+                      />
+                      <KeyRound className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-2.5" />
+                    </div>
+                    {passcodeError && (
+                      <p className="text-[11px] text-red-600 mt-1">
+                        인증코드가 올바르지 않습니다. (kmu2024 입력)
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-1.5">
+                    <input
+                      type="email"
+                      value={adminEmailInput}
+                      onChange={(e) => setAdminEmailInput(e.target.value)}
+                      placeholder="등록된 관리자 이메일 (예: congtien16798@gmail.com)"
+                      className="w-full px-3 py-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleEmailQuickLogin}
+                      className="w-full py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded cursor-pointer"
+                    >
+                      이메일 확인 및 로그인
+                    </button>
+                  </div>
                 )}
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-2 bg-[#1A3B6B] hover:bg-[#122a4d] text-white text-xs font-bold rounded transition-colors shadow-2xs"
-              >
-                관리자 모드 접속
-              </button>
+              {!showEmailLoginForm && (
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-[#1A3B6B] hover:bg-[#122a4d] text-white text-xs font-bold rounded transition-colors shadow-2xs cursor-pointer"
+                >
+                  관리자 모드 접속
+                </button>
+              )}
             </form>
           </div>
 
           <div className="mt-6 pt-4 border-t border-gray-100 text-center">
             <button
               onClick={onExitAdmin}
-              className="text-xs text-gray-500 hover:text-gray-800 font-medium"
+              className="text-xs text-gray-500 hover:text-gray-800 font-medium cursor-pointer"
             >
               ← 학생용 가이드 홈으로 돌아가기
             </button>
