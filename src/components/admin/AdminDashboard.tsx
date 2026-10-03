@@ -12,7 +12,8 @@ import {
   User as UserIcon,
   AlertCircle,
   Bot,
-  Calendar
+  Calendar,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -23,6 +24,7 @@ import { DocumentManager } from './DocumentManager';
 import { InquiryManager } from './InquiryManager';
 import { ChatbotManager } from './ChatbotManager';
 import { ScheduleManager } from './ScheduleManager';
+import { AdminAccountManager } from './AdminAccountManager';
 
 interface AdminDashboardProps {
   faqs: FaqItem[];
@@ -50,7 +52,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const { user, isAdmin, signInWithGoogle, signOut, simulateAdminLogin, error: authError } = useAuth();
   const { isDesignMode, setIsDesignMode } = useTheme();
 
-  const [activeAdminTab, setActiveAdminTab] = useState<'design' | 'faqs' | 'docs' | 'inquiries' | 'schedules' | 'chatbot'>('design');
+  const [activeAdminTab, setActiveAdminTab] = useState<'design' | 'faqs' | 'docs' | 'inquiries' | 'schedules' | 'chatbot' | 'admins'>('design');
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -272,6 +274,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveAdminTab('admins')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'admins'
+                ? 'bg-[#1A3B6B] text-white shadow-xs'
+                : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-700" />
+            <span>관리자 계정 관리</span>
+          </button>
+
+          <button
             onClick={() => signOut()}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-red-600 hover:bg-red-50 border border-red-200 transition-colors ml-1 shrink-0 whitespace-nowrap cursor-pointer"
           >
@@ -283,7 +297,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Render Active Tab */}
       <div>
-        {activeAdminTab === 'design' && <ThemeCustomizer />}
+        {activeAdminTab === 'design' && (
+          <ThemeCustomizer
+            faqs={faqs}
+            documents={documents}
+            schedules={schedules}
+          />
+        )}
         {activeAdminTab === 'faqs' && <FaqManager faqs={faqs} setFaqs={setFaqs} />}
         {activeAdminTab === 'docs' && (
           <DocumentManager documents={documents} setDocuments={setDocuments} />
@@ -295,6 +315,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <ScheduleManager schedules={schedules} setSchedules={setSchedules} />
         )}
         {activeAdminTab === 'chatbot' && <ChatbotManager />}
+        {activeAdminTab === 'admins' && <AdminAccountManager />}
       </div>
     </div>
   );

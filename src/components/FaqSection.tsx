@@ -24,7 +24,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
 
-  const [expandedId, setExpandedId] = useState<string | null>(faqs[0]?.id || null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
 
@@ -82,9 +82,15 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     };
   }, [currentLang, faqs, config.categories]);
 
-  // Filter FAQs based on category & search query
+  // Filter FAQs based on category & search query (automatically pruning empty posts)
   const filteredFaqs = (faqs || []).filter((faq) => {
     if (!faq || faq.hidden) return false;
+    // Empty post filter: must have a non-empty title and content (or image)
+    const hasTitle = !!faq.title && faq.title.trim() !== '';
+    const plainContent = (faq.content || '').replace(/<[^>]*>/g, '').trim();
+    const hasContent = plainContent !== '' || !!faq.imageUrl || (faq.content || '').includes('<img');
+    if (!hasTitle || !hasContent) return false;
+
     const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory;
     if (!matchesCategory) return false;
 
@@ -110,8 +116,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     return dateB - dateA;
   });
 
-  const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id));
+  const toggleExpand = (uniqueId: string) => {
+    setExpandedId((prev) => (prev === uniqueId ? null : uniqueId));
   };
 
   const handleCopyUrl = (id: string, e: React.MouseEvent) => {
@@ -259,7 +265,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       ) : (
         <div className="space-y-3">
           {sortedFaqs.map((faq, index) => {
-            const isExpanded = expandedId === faq.id;
+            const uniqueItemKey = faq.id && faq.id.trim() !== '' ? faq.id.trim() : `faq-card-${index}`;
+            const isExpanded = expandedId === uniqueItemKey;
             const badge = getCategoryBadge(faq.category || '');
             const titleText = (currentLang !== 'ko' && !showOriginal && translatedMap[faq.id]?.title)
               ? translatedMap[faq.id].title
@@ -270,8 +277,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
             return (
               <div
-                key={`faq-item-card-${faq.id || index}-${index}`}
-                id={`faq-${faq.id}`}
+                key={`faq-item-card-${uniqueItemKey}-${index}`}
+                id={`faq-${uniqueItemKey}`}
                 className={`bg-white rounded-md border transition-all ${
                   isExpanded
                     ? 'border-[#1A3B6B] shadow-xs'
@@ -280,7 +287,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
               >
                 {/* Accordion Header */}
                 <div
-                  onClick={() => toggleExpand(faq.id)}
+                  onClick={() => toggleExpand(uniqueItemKey)}
                   className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
                 >
                   <div className="flex items-start gap-2.5 flex-1 min-w-0">

@@ -108,6 +108,10 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
   // Matched FAQs
   const matchedFaqs = (faqs || []).filter((faq) => {
     if (!faq || faq.hidden) return false;
+    const hasTitle = !!faq.title && faq.title.trim() !== '';
+    const plainContent = (faq.content || '').replace(/<[^>]*>/g, '').trim();
+    const hasContent = plainContent !== '' || !!faq.imageUrl || (faq.content || '').includes('<img');
+    if (!hasTitle || !hasContent) return false;
     if (!q) return true;
     return (
       (faq.title?.toLowerCase() || '').includes(q) ||
@@ -349,20 +353,21 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
           </div>
 
           <div className="space-y-2.5">
-            {matchedFaqs.map((faq) => {
-              const isExpanded = expandedFaqId === faq.id;
+            {matchedFaqs.map((faq, index) => {
+              const uniqueFaqKey = faq.id && faq.id.trim() !== '' ? faq.id.trim() : `search-faq-${index}`;
+              const isExpanded = expandedFaqId === uniqueFaqKey;
               const titleToRender = transFaqMap[faq.id]?.title || faq.title;
               const contentToRender = transFaqMap[faq.id]?.content || faq.content;
               const catBadge = getFaqCategoryLabel(faq.category);
 
               return (
                 <div
-                  key={faq.id}
+                  key={`matched-faq-${uniqueFaqKey}-${index}`}
                   className="bg-white rounded-md border border-[#E2E5E8] shadow-2xs overflow-hidden transition-all duration-200 hover:border-gray-300"
                 >
                   {/* Question Header Row */}
                   <div
-                    onClick={() => setExpandedFaqId(isExpanded ? null : faq.id)}
+                    onClick={() => setExpandedFaqId(isExpanded ? null : uniqueFaqKey)}
                     className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50/80 transition-colors select-none min-h-[44px]"
                   >
                     <div className="flex items-center gap-2 sm:gap-2.5 flex-1 min-w-0 pr-2 sm:pr-3">

@@ -417,7 +417,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                             )}
                           </div>
 
-                          <div className="font-mono text-xs sm:text-sm font-bold text-gray-900 sm:mt-1">
+                          <div className="text-xs sm:text-sm font-bold text-gray-900 sm:mt-1">
                             {ev.startDate}
                             {isMultiDay && <span className="text-gray-400 font-normal"> ~ {ev.endDate}</span>}
                           </div>
@@ -635,7 +635,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   <div className="md:w-36 shrink-0 flex items-center md:flex-col md:items-start gap-2">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`text-lg sm:text-xl font-bold font-mono ${
+                        className={`text-lg sm:text-xl font-bold ${
                           isToday ? 'text-[#1A3B6B]' : 'text-gray-900'
                         }`}
                       >
@@ -686,7 +686,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                                 )}
                               </div>
                               {ev.time && (
-                                <span className="text-xs text-gray-500 font-mono flex items-center gap-1">
+                                <span className="text-xs text-gray-500 flex items-center gap-1">
                                   <Clock className="w-3 h-3 text-gray-400" />
                                   {ev.time}
                                 </span>
@@ -758,7 +758,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
               <div className="flex items-center gap-2 text-gray-700">
                 <CalendarIcon className="w-4 h-4 text-[#1A3B6B] shrink-0" />
                 <span className="font-semibold text-gray-900">일정 기간:</span>
-                <span className="font-mono">
+                <span>
                   {selectedEvent.startDate}
                   {selectedEvent.startDate !== selectedEvent.endDate && ` ~ ${selectedEvent.endDate}`}
                 </span>

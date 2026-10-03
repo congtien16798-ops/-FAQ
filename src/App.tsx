@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, doc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Language, FaqItem, DocumentItem, InquiryItem, ScheduleEvent, FaqCategory } from './types';
 import { initialFaqs, initialDocuments } from './constants/initialData';
@@ -105,101 +105,150 @@ function MainApp() {
     localStorage.setItem('kmu_language', lang);
   };
 
-  // Fetch Firestore FAQs, Documents, Inquiries on boot
+  // Real-time Firestore Listeners with automatic cleanup of empty posts
   useEffect(() => {
-    // 1. FAQs
-    const fetchFaqs = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'faqs'));
-        if (!snap.empty) {
-          const list: FaqItem[] = [];
-          snap.forEach((docSnap) => {
-            list.push(docSnap.data() as FaqItem);
-          });
-          list.sort((a, b) => {
-            if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-            if (a.order !== undefined) return -1;
-            if (b.order !== undefined) return 1;
-            return 0;
-          });
-          setFaqs(list);
-          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
-        }
-      } catch (err) {
-        console.warn('Could not load remote faqs, using initial dataset:', err);
-      }
-    };
+    // 1. Real-time FAQs Listener & Auto-Pruning
+    const unsubFaqs = onSnapshot(collection(db, 'faqs'), (snap) => {
+      if (!snap.empty) {
+        const list: FaqItem[] = [];
+        const emptyIds: string[] = [];
 
-    // 2. Documents
-    const fetchDocs = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'documents'));
-        if (!snap.empty) {
-          const list: DocumentItem[] = [];
-          snap.forEach((docSnap) => {
-            list.push(docSnap.data() as DocumentItem);
-          });
-          list.sort((a, b) => {
-            if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-            if (a.order !== undefined) return -1;
-            if (b.order !== undefined) return 1;
-            return 0;
-          });
-          setDocuments(list);
-          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
-        }
-      } catch (err) {
-        console.warn('Could not load remote documents, using initial dataset:', err);
-      }
-    };
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const item = { ...data, id: data.id || docSnap.id } as FaqItem;
+          const hasTitle = !!item.title && item.title.trim() !== '';
+          const plainContent = (item.content || '').replace(/<[^>]*>/g, '').trim();
+          const hasContent = plainContent !== '' || !!item.imageUrl || (item.content || '').includes('<img');
 
-    // 3. Inquiries
-    const fetchInquiries = async () => {
-      if (isAdmin) {
-        try {
-          const snap = await getDocs(collection(db, 'inquiries'));
-          if (!snap.empty) {
-            const list: InquiryItem[] = [];
-            snap.forEach((docSnap) => {
-              list.push(docSnap.data() as InquiryItem);
-            });
-            // Sort by date desc
-            list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-            setInquiries(list);
-            localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
+          if (!hasTitle || !hasContent) {
+            emptyIds.push(item.id);
+          } else {
+            list.push(item);
           }
-        } catch (err) {
-          console.warn('Could not load remote inquiries:', err);
+        });
+
+        list.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+          if (a.order !== undefined) return -1;
+          if (b.order !== undefined) return 1;
+          return 0;
+        });
+
+        setFaqs(list);
+        try {
+          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
+        } catch {
+          // ignore
+        }
+
+        // Auto delete empty posts from Firestore
+        emptyIds.forEach(async (id) => {
+          try {
+            await deleteDoc(doc(db, 'faqs', id));
+          } catch {
+            // ignore
+          }
+        });
+      }
+    }, (err) => {
+      console.warn('Real-time faqs listener error, using local fallback:', err);
+    });
+
+    // 2. Real-time Documents Listener & Auto-Pruning
+    const unsubDocs = onSnapshot(collection(db, 'documents'), (snap) => {
+      if (!snap.empty) {
+        const list: DocumentItem[] = [];
+        const emptyIds: string[] = [];
+
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const item = { ...data, id: data.id || docSnap.id } as DocumentItem;
+          const hasTitle = !!item.title && item.title.trim() !== '';
+          const hasFile = !!item.fileName && item.fileName.trim() !== '';
+
+          if (!hasTitle || !hasFile) {
+            emptyIds.push(item.id);
+          } else {
+            list.push(item);
+          }
+        });
+
+        list.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+          if (a.order !== undefined) return -1;
+          if (b.order !== undefined) return 1;
+          return 0;
+        });
+
+        setDocuments(list);
+        try {
+          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
+        } catch {
+          // ignore
+        }
+
+        emptyIds.forEach(async (id) => {
+          try {
+            await deleteDoc(doc(db, 'documents', id));
+          } catch {
+            // ignore
+          }
+        });
+      }
+    }, (err) => {
+      console.warn('Real-time documents listener error, using local fallback:', err);
+    });
+
+    // 3. Real-time Inquiries Listener
+    const unsubInquiries = onSnapshot(collection(db, 'inquiries'), (snap) => {
+      if (!snap.empty) {
+        const list: InquiryItem[] = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          list.push({ ...data, id: data.id || docSnap.id } as InquiryItem);
+        });
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setInquiries(list);
+        try {
+          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
+        } catch {
+          // ignore
         }
       }
-    };
+    }, (err) => {
+      console.warn('Real-time inquiries listener error:', err);
+    });
 
-    // 4. Schedules
-    const fetchSchedules = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'schedules'));
-        if (!snap.empty) {
-          const list: ScheduleEvent[] = [];
-          snap.forEach((docSnap) => {
-            list.push(docSnap.data() as ScheduleEvent);
-          });
-          list.sort((a, b) => {
-            if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-            return a.startDate.localeCompare(b.startDate);
-          });
-          setSchedules(list);
+    // 4. Real-time Schedules Listener
+    const unsubSchedules = onSnapshot(collection(db, 'schedules'), (snap) => {
+      if (!snap.empty) {
+        const list: ScheduleEvent[] = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data();
+          list.push({ ...data, id: data.id || docSnap.id } as ScheduleEvent);
+        });
+        list.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+          return a.startDate.localeCompare(b.startDate);
+        });
+        setSchedules(list);
+        try {
           localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
+        } catch {
+          // ignore
         }
-      } catch (err) {
-        console.warn('Could not load remote schedules:', err);
       }
-    };
+    }, (err) => {
+      console.warn('Real-time schedules listener error:', err);
+    });
 
-    fetchFaqs();
-    fetchDocs();
-    fetchInquiries();
-    fetchSchedules();
-  }, [isAdmin]);
+    return () => {
+      unsubFaqs();
+      unsubDocs();
+      unsubInquiries();
+      unsubSchedules();
+    };
+  }, []);
 
   // Persist local caches
   useEffect(() => {
@@ -254,7 +303,13 @@ function MainApp() {
       <main className="flex-1">
         {/* DESIGN MODE: Split View Customizer */}
         {isDesignMode ? (
-          <ThemeCustomizer />
+          <ThemeCustomizer
+            faqs={faqs}
+            documents={documents}
+            schedules={schedules}
+            currentLang={currentLang}
+            onExit={() => setIsDesignMode(false)}
+          />
         ) : activeTab === 'admin' ? (
           /* ADMIN DASHBOARD */
           <AdminDashboard
@@ -311,6 +366,8 @@ function MainApp() {
                   <DownloadsSection
                     documents={documents}
                     currentLang={currentLang}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
                   />
                 )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus,
   Edit2,
@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   X,
   FileCheck,
-  Save
+  Save,
+  Sparkles
 } from 'lucide-react';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../firebase';
@@ -52,6 +53,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [hidden, setHidden] = useState(false);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [uploadedFileNotice, setUploadedFileNotice] = useState<string | null>(null);
+  const [autoIntervenedInfo, setAutoIntervenedInfo] = useState<{
+    fileName: string;
+    fileSize: string;
+    fileType: DocumentFileType;
+  } | null>(null);
 
   // Delete & Hide Management Dialog State
   const [deleteTarget, setDeleteTarget] = useState<DocumentItem | null>(null);
@@ -64,10 +70,34 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  const categories = ['all', ...Array.from(new Set(documents.map((d) => d.category).filter(Boolean)))];
+  // Auto-prune empty documents (내용없고 빈 서식 자동 삭제)
+  useEffect(() => {
+    if (!documents || documents.length === 0) return;
+    const emptyDocs = documents.filter((d) => !d || !d.title || d.title.trim() === '' || !d.fileName || d.fileName.trim() === '');
+    if (emptyDocs.length > 0) {
+      const validOnly = documents.filter((d) => !emptyDocs.includes(d));
+      setDocuments(validOnly);
+      try {
+        localStorage.setItem('kmu_docs_cache', JSON.stringify(validOnly));
+      } catch {
+        // ignore
+      }
+      emptyDocs.forEach(async (docItem) => {
+        if (docItem?.id) {
+          try {
+            await deleteDoc(doc(db, 'documents', docItem.id));
+          } catch {
+            // ignore
+          }
+        }
+      });
+    }
+  }, [documents, setDocuments]);
+
+  const categories = ['all', ...Array.from(new Set(documents.filter((d) => d?.category && d.title?.trim()).map((d) => d.category)))];
 
   const filteredDocs = (documents || []).filter((d) => {
-    if (!d) return false;
+    if (!d || !d.title || d.title.trim() === '' || !d.fileName || d.fileName.trim() === '') return false;
     if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
     if (visibilityFilter === 'visible' && d.hidden) return false;
     if (visibilityFilter === 'hidden' && !d.hidden) return false;
@@ -226,6 +256,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     setDownloadUrl('#');
     setHidden(false);
     setUploadedFileNotice(null);
+    setAutoIntervenedInfo(null);
     setIsEditing(true);
   };
 
@@ -240,6 +271,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     setDownloadUrl(d.downloadUrl);
     setHidden(d.hidden || false);
     setUploadedFileNotice(d.downloadUrl && d.downloadUrl !== '#' ? `현재 등록된 파일: ${d.fileName}` : null);
+    setAutoIntervenedInfo(null);
     setIsEditing(true);
   };
 
@@ -251,24 +283,30 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
   };
 
   const processSelectedFile = (file: File) => {
-    // 1. Format size
+    // 1. Format size automatically
     const sizeInKb = file.size / 1024;
     const formattedSize =
       sizeInKb >= 1024
         ? `${(sizeInKb / 1024).toFixed(1)} MB`
         : `${Math.round(sizeInKb)} KB`;
 
-    // 2. Detect type
+    // 2. Detect type automatically
     const lowerName = file.name.toLowerCase();
     let detectedType: DocumentFileType = 'pdf';
-    if (lowerName.endsWith('.hwp')) detectedType = 'hwp';
+    if (lowerName.endsWith('.hwp') || lowerName.endsWith('.hwpx')) detectedType = 'hwp';
     else if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) detectedType = 'docx';
-    else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) detectedType = 'xlsx';
+    else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || lowerName.endsWith('.csv')) detectedType = 'xlsx';
 
-    // 3. Set name & size & type
+    // 3. Automatically intervene: Set name & size & type
     setFileName(file.name);
     setFileSize(formattedSize);
     setFileType(detectedType);
+    setAutoIntervenedInfo({
+      fileName: file.name,
+      fileSize: formattedSize,
+      fileType: detectedType,
+    });
+
     if (!title.trim()) {
       // Suggest title from file name without extension
       const baseName = file.name.replace(/\.[^/.]+$/, '');
@@ -281,10 +319,25 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       const dataUrl = event.target?.result as string;
       if (dataUrl) {
         setDownloadUrl(dataUrl);
-        setUploadedFileNotice(`✓ 파일 업로드 완료: ${file.name} (${formattedSize})`);
+        setUploadedFileNotice(`✓ 파일 업로드 및 자동 분석 완료: ${file.name} (${formattedSize})`);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Automatically detect file format when filename is changed or typed
+  const handleFileNameChange = (val: string) => {
+    setFileName(val);
+    const lower = val.trim().toLowerCase();
+    if (lower.endsWith('.hwp') || lower.endsWith('.hwpx')) {
+      setFileType('hwp');
+    } else if (lower.endsWith('.docx') || lower.endsWith('.doc')) {
+      setFileType('docx');
+    } else if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) {
+      setFileType('xlsx');
+    } else if (lower.endsWith('.pdf')) {
+      setFileType('pdf');
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -786,6 +839,31 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     <span>{uploadedFileNotice}</span>
                   </div>
                 )}
+
+                {/* Automatic Intervention Feedback Card */}
+                {autoIntervenedInfo && (
+                  <div className="mt-2.5 p-3 bg-blue-50/80 border border-blue-200 rounded-md text-xs text-blue-900 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1.5 font-bold mb-1.5 text-[#1A3B6B]">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>서식 파일 자동 개입 완료</span>
+                      <span className="text-[10px] font-normal text-gray-500">(파일명, 용량, 포맷이 자동으로 추출 및 반영되었습니다)</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] bg-white p-2 rounded border border-blue-100">
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">다운로드 파일명</span>
+                        <span className="font-mono font-bold text-gray-900 truncate block">{autoIntervenedInfo.fileName}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">감지된 파일 크기</span>
+                        <span className="font-bold text-gray-900 block">{autoIntervenedInfo.fileSize}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block text-[10px]">인식된 파일 포맷</span>
+                        <span className="font-bold text-[#1A3B6B] uppercase block">{autoIntervenedInfo.fileType} 문서</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Title */}
@@ -818,8 +896,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    파일 포맷
+                  <label className="block font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                    <span>파일 포맷</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      자동 감지
+                    </span>
                   </label>
                   <select
                     value={fileType}
@@ -827,9 +908,9 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white"
                   >
                     <option value="pdf">PDF 문서</option>
-                    <option value="hwp">한글 (HWP)</option>
-                    <option value="docx">워드 (DOCX)</option>
-                    <option value="xlsx">엑셀 (XLSX)</option>
+                    <option value="hwp">한글 (HWP/HWPX)</option>
+                    <option value="docx">워드 (DOCX/DOC)</option>
+                    <option value="xlsx">엑셀 (XLSX/XLS)</option>
                   </select>
                 </div>
               </div>
@@ -851,28 +932,34 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
               {/* File details */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    다운로드 파일명 <span className="text-red-500">*</span>
+                  <label className="block font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                    <span>다운로드 파일명 <span className="text-red-500">*</span></span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      자동 개입
+                    </span>
                   </label>
                   <input
                     type="text"
                     required
                     value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
+                    onChange={(e) => handleFileNameChange(e.target.value)}
                     placeholder="stay_extension_form.pdf"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 font-mono"
+                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 font-mono text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">
-                    파일 크기
+                  <label className="block font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                    <span>파일 크기</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      자동 계산
+                    </span>
                   </label>
                   <input
                     type="text"
                     value={fileSize}
                     onChange={(e) => setFileSize(e.target.value)}
                     placeholder="예: 240 KB"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300"
+                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs"
                   />
                 </div>
               </div>

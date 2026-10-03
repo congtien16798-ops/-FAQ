@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -86,6 +86,30 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     setStatusMessage({ text, type });
     setTimeout(() => setStatusMessage(null), 3500);
   };
+
+  // Auto-prune empty schedule items (내용 및 제목 없는 일정 자동 삭제)
+  useEffect(() => {
+    if (!schedules || schedules.length === 0) return;
+    const emptyItems = schedules.filter((s) => !s || !s.title || s.title.trim() === '' || !s.startDate);
+    if (emptyItems.length > 0) {
+      const validOnly = schedules.filter((s) => !emptyItems.includes(s));
+      setSchedules(validOnly);
+      try {
+        localStorage.setItem('kmu_schedules_cache', JSON.stringify(validOnly));
+      } catch {
+        // ignore
+      }
+      emptyItems.forEach(async (ev) => {
+        if (ev?.id) {
+          try {
+            await deleteDoc(doc(db, 'schedules', ev.id));
+          } catch {
+            // ignore
+          }
+        }
+      });
+    }
+  }, [schedules, setSchedules]);
 
   // Open Add Modal
   const handleOpenAddModal = () => {

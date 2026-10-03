@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { initialSiteConfig } from '../constants/initialData';
 import { SiteConfig, ConfigArchiveItem } from '../types';
@@ -7,6 +7,7 @@ import { SiteConfig, ConfigArchiveItem } from '../types';
 interface ThemeContextType {
   config: SiteConfig;
   draftConfig: SiteConfig;
+  liveConfig: SiteConfig;
   archives: ConfigArchiveItem[];
   isDesignMode: boolean;
   setIsDesignMode: (val: boolean) => void;
@@ -82,30 +83,31 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty('--font-scale', cfg.fontSize === 'large' ? '1.08rem' : '1rem');
   };
 
-  // On mount: fetch remote site_config if present
+  // On mount: listen to real-time site_config changes
   useEffect(() => {
-    const fetchRemoteConfig = async () => {
-      try {
-        const docRef = doc(db, 'site_config', 'main');
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          const remoteData = snap.data() as Partial<SiteConfig>;
-          const merged: SiteConfig = { ...initialSiteConfig, ...remoteData };
-          setConfig(merged);
-          setDraftConfig(merged);
+    const docRef = doc(db, 'site_config', 'main');
+    const unsub = onSnapshot(docRef, (snap) => {
+      if (snap.exists()) {
+        const remoteData = snap.data() as Partial<SiteConfig>;
+        const merged: SiteConfig = { ...initialSiteConfig, ...remoteData };
+        setConfig(merged);
+        setDraftConfig((prev) => (isDesignMode ? prev : merged));
+        try {
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-          applyCssVariables(merged);
-        } else {
-          applyCssVariables(config);
+        } catch {
+          // ignore
         }
-      } catch (err) {
-        console.warn('Could not fetch remote config, using local cache:', err);
+        applyCssVariables(merged);
+      } else {
         applyCssVariables(config);
       }
-    };
+    }, (err) => {
+      console.warn('Real-time site_config listener warning, using local cache:', err);
+      applyCssVariables(config);
+    });
 
-    fetchRemoteConfig();
-  }, []);
+    return () => unsub();
+  }, [isDesignMode]);
 
   // When live config updates, re-apply CSS variables
   useEffect(() => {
@@ -323,11 +325,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const effectiveConfig = isDesignMode ? draftConfig : config;
+
   return (
     <ThemeContext.Provider
       value={{
-        config,
+        config: effectiveConfig,
         draftConfig,
+        liveConfig: config,
         archives,
         isDesignMode,
         setIsDesignMode,

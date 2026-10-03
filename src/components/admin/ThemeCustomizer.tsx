@@ -59,10 +59,45 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { KmuLogo } from '../KmuLogo';
 import { NoticePopup } from '../NoticePopup';
-import { LogoType, PopupStyle, PopupIconType, CategoryItem, RelatedSite, ConfigArchiveItem } from '../../types';
+import { Navbar } from '../Navbar';
+import { HeroSection } from '../HeroSection';
+import { FaqSection } from '../FaqSection';
+import { DownloadsSection } from '../DownloadsSection';
+import { ScheduleSection } from '../ScheduleSection';
+import { InquirySection } from '../InquirySection';
+import { Footer } from '../Footer';
+import { IntegratedSearchResults } from '../IntegratedSearchResults';
+import { 
+  LogoType, 
+  PopupStyle, 
+  PopupIconType, 
+  CategoryItem, 
+  RelatedSite, 
+  ConfigArchiveItem,
+  FaqItem,
+  DocumentItem,
+  ScheduleEvent,
+  Language
+} from '../../types';
 import { DEFAULT_RELATED_SITES } from '../../constants/initialRelatedSites';
+import { initialFaqs, initialDocuments } from '../../constants/initialData';
+import { INITIAL_SCHEDULES } from '../../constants/initialSchedules';
 
-export const ThemeCustomizer: React.FC = () => {
+export interface ThemeCustomizerProps {
+  faqs?: FaqItem[];
+  documents?: DocumentItem[];
+  schedules?: ScheduleEvent[];
+  currentLang?: Language;
+  onExit?: () => void;
+}
+
+export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
+  faqs,
+  documents,
+  schedules,
+  currentLang = 'ko',
+  onExit,
+}) => {
   const {
     config,
     draftConfig,
@@ -105,7 +140,36 @@ export const ThemeCustomizer: React.FC = () => {
   const [previewFaqExpanded, setPreviewFaqExpanded] = useState<string | null>('faq-preview-1');
   const [previewSearchText, setPreviewSearchText] = useState('');
   const [previewSelectedCategory, setPreviewSelectedCategory] = useState<string>('all');
+  const [previewTab, setPreviewTab] = useState<'faq' | 'downloads' | 'inquiry' | 'schedule'>('faq');
   const [isFullScreenPreview, setIsFullScreenPreview] = useState(false);
+
+  // Real datasets for authentic 1:1 Live Preview (미리보기와 메인화면 일치화)
+  const effectiveFaqs: FaqItem[] = (faqs && faqs.length > 0) ? faqs : (() => {
+    try {
+      const c = localStorage.getItem('kmu_faqs_cache');
+      return c ? JSON.parse(c) : initialFaqs;
+    } catch {
+      return initialFaqs;
+    }
+  })();
+
+  const effectiveDocs: DocumentItem[] = (documents && documents.length > 0) ? documents : (() => {
+    try {
+      const c = localStorage.getItem('kmu_docs_cache');
+      return c ? JSON.parse(c) : initialDocuments;
+    } catch {
+      return initialDocuments;
+    }
+  })();
+
+  const effectiveSchedules: ScheduleEvent[] = (schedules && schedules.length > 0) ? schedules : (() => {
+    try {
+      const c = localStorage.getItem('kmu_schedules_cache');
+      return c ? JSON.parse(c) : INITIAL_SCHEDULES;
+    } catch {
+      return INITIAL_SCHEDULES;
+    }
+  })();
 
   // Preset themes
   const presets = [
@@ -2303,296 +2367,120 @@ export const ThemeCustomizer: React.FC = () => {
                 borderColor: '#E2E5E8',
               }}
             >
-              {/* Preview Header */}
-              <div className="p-3 border-b border-[#E2E5E8] flex items-center justify-between bg-white">
-                <div className="flex items-center gap-2.5">
-                  {draftConfig.logoType && draftConfig.logoType !== 'none' && (
-                    <KmuLogo config={draftConfig} />
-                  )}
-                  <span
-                    className="block text-xs font-bold tracking-tight"
-                    style={{ color: draftConfig.mainColor }}
-                  >
-                    {draftConfig.heroTitle}
-                  </span>
-                </div>
-                <div className="flex gap-1 text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 font-bold uppercase">
-                    {previewLang}
-                  </span>
-                </div>
-              </div>
+              {/* Real Student Portal Navbar */}
+              <Navbar
+                currentLang={previewLang}
+                onLanguageChange={setPreviewLang}
+                activeTab={previewTab}
+                setActiveTab={(tab) => {
+                  if (tab !== 'admin') {
+                    setPreviewTab(tab);
+                    if (tab === 'faq') setPreviewSection('faq');
+                    else if (tab === 'downloads') setPreviewSection('docs');
+                    else if (tab === 'schedule') setPreviewSection('schedule');
+                    else if (tab === 'inquiry') setPreviewSection('all');
+                  }
+                }}
+              />
 
-              {/* Preview Hero Banner */}
-              {(previewSection === 'all' || previewSection === 'hero') && (
-                <div
-                  className="p-6 text-center text-white transition-all"
-                  style={{
-                    backgroundColor: draftConfig.bgType === 'campus' ? undefined : draftConfig.mainColor,
-                    backgroundImage:
-                      draftConfig.bgType === 'campus'
-                        ? 'linear-gradient(rgba(18, 40, 75, 0.88), rgba(26, 59, 107, 0.94)), url("https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80")'
-                        : undefined,
-                    backgroundSize: 'cover',
-                  }}
-                >
-                  <h3 className="text-base font-extrabold mb-3">
-                    {draftConfig.heroTitle}
-                  </h3>
-
-                  {/* Interactive Search Bar in Preview */}
-                  <div
-                    className="bg-white p-1 flex items-center shadow-md text-xs text-gray-700 max-w-md mx-auto transition-all"
-                    style={{ borderRadius: `${draftConfig.searchBarRadius ?? draftConfig.borderRadius ?? 8}px` }}
-                  >
-                    <span className="px-2 text-gray-400">🔍</span>
-                    <input
-                      type="text"
-                      value={previewSearchText}
-                      onChange={(e) => setPreviewSearchText(e.target.value)}
-                      placeholder={draftConfig.searchPlaceholder || '무엇이든 검색해 보세요...'}
-                      className="text-gray-800 text-[11px] truncate flex-1 outline-none bg-transparent"
-                    />
+              {/* Popup Notice Preview if selected */}
+              {previewSection === 'popup' && draftConfig.popupEnabled && (
+                <div className="p-4 bg-amber-50 border-b border-amber-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#1A3B6B] text-white">
+                      {draftConfig.popupBadge || '공지사항'}
+                    </span>
+                    <h4 className="text-xs font-bold text-gray-900">{draftConfig.popupTitle}</h4>
+                  </div>
+                  <p className="text-[11px] text-gray-700 whitespace-pre-line leading-relaxed mb-3">
+                    {draftConfig.popupContent}
+                  </p>
+                  {draftConfig.popupLinkText && (
                     <button
                       type="button"
-                      className="font-bold text-white flex items-center justify-center gap-1 transition-all"
-                      style={{
-                        backgroundColor:
-                          draftConfig.searchButtonColor || draftConfig.accentColor || draftConfig.mainColor,
-                        borderRadius:
-                          draftConfig.searchButtonShape === 'square'
-                            ? '0px'
-                            : draftConfig.searchButtonShape === 'pill'
-                            ? '9999px'
-                            : `${draftConfig.searchButtonRadius ?? 6}px`,
-                        padding:
-                          draftConfig.searchButtonSize === 'sm'
-                            ? '3px 8px'
-                            : draftConfig.searchButtonSize === 'lg'
-                            ? '8px 16px'
-                            : '5px 12px',
-                        fontSize:
-                          draftConfig.searchButtonSize === 'sm'
-                            ? '10px'
-                            : draftConfig.searchButtonSize === 'lg'
-                            ? '12px'
-                            : '11px',
+                      onClick={() => {
+                        if (draftConfig.popupLinkTab) {
+                          setPreviewTab(draftConfig.popupLinkTab);
+                          if (draftConfig.popupLinkTab === 'faq') setPreviewSection('faq');
+                          else if (draftConfig.popupLinkTab === 'downloads') setPreviewSection('docs');
+                        }
                       }}
+                      className="text-[11px] text-[#1A3B6B] font-bold hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      {draftConfig.searchButtonShowIcon !== false && (
-                        <span>
-                          {draftConfig.searchButtonIconType === 'arrow'
-                            ? '➔'
-                            : draftConfig.searchButtonIconType === 'sparkles'
-                            ? '✨'
-                            : '🔍'}
-                        </span>
-                      )}
-                      <span>{draftConfig.searchButtonText || '검색'}</span>
+                      <span>{draftConfig.popupLinkText}</span>
+                      <ArrowRight className="w-3 h-3" />
                     </button>
-                  </div>
-
-                  {/* Interactive Category Chips */}
-                  <div className="flex flex-wrap items-center justify-center gap-1 mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewSelectedCategory('all')}
-                      className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors cursor-pointer border ${
-                        previewSelectedCategory === 'all'
-                          ? 'bg-white text-gray-900 border-white font-bold'
-                          : 'bg-white/15 text-white/90 border-white/20 hover:bg-white/25'
-                      }`}
-                    >
-                      전체
-                    </button>
-                    {(draftConfig.categories || []).map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setPreviewSelectedCategory(cat.id)}
-                        className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors cursor-pointer border ${
-                          previewSelectedCategory === cat.id
-                            ? 'bg-white text-gray-900 border-white font-bold'
-                            : 'bg-white/15 text-white/90 border-white/20 hover:bg-white/25'
-                        }`}
-                      >
-                        {cat.name.ko}
-                      </button>
-                    ))}
-                  </div>
+                  )}
                 </div>
               )}
 
-              {/* Preview FAQ Section */}
-              {(previewSection === 'all' || previewSection === 'faq') && (
-                <div className="p-4 space-y-3 bg-[#fafbfc]">
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1 border-b border-gray-200">
-                    <span className="flex items-center gap-1.5">
-                      <HelpCircle className="w-3.5 h-3.5 text-[#1A3B6B]" />
-                      <span>자주 묻는 질문 (FAQ) 실시간 반응</span>
-                    </span>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-white"
-                      style={{ backgroundColor: draftConfig.warnColor }}
-                    >
-                      중요 공지
-                    </span>
-                  </div>
-
-                  {/* Interactive FAQ Card 1 */}
-                  <div
-                    className="p-3 bg-white border border-[#E2E5E8] shadow-2xs text-xs transition-all cursor-pointer"
-                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                    onClick={() =>
-                      setPreviewFaqExpanded((prev) => (prev === 'faq-preview-1' ? null : 'faq-preview-1'))
-                    }
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: draftConfig.accentColor }}
-                        ></span>
-                        <span className="font-bold text-gray-800">
-                          비자(D-4) 연장 신청은 언제부터 가능한가요?
-                        </span>
-                      </div>
-                      <span className="text-gray-400 text-xs">
-                        {previewFaqExpanded === 'faq-preview-1' ? '▲' : '▼'}
-                      </span>
-                    </div>
-
-                    {previewFaqExpanded === 'faq-preview-1' && (
-                      <div className="mt-2.5 pt-2 border-t border-gray-100 text-[11px] text-gray-600 leading-relaxed animate-fade-in">
-                        체류기간 만료일 4개월 전부터 관할 출입국관리사무소(대구출입국) 방문 또는 하이코리아 웹사이트를 통해 온라인 신청이 가능합니다. (출석률 80% 이상 필수)
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Interactive FAQ Card 2 */}
-                  <div
-                    className="p-3 bg-white border border-[#E2E5E8] shadow-2xs text-xs transition-all cursor-pointer"
-                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                    onClick={() =>
-                      setPreviewFaqExpanded((prev) => (prev === 'faq-preview-2' ? null : 'faq-preview-2'))
-                    }
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: draftConfig.accentColor }}
-                        ></span>
-                        <span className="font-bold text-gray-800">
-                          기숙사(명교생활관) 외박 신청 방법 및 기준
-                        </span>
-                      </div>
-                      <span className="text-gray-400 text-xs">
-                        {previewFaqExpanded === 'faq-preview-2' ? '▲' : '▼'}
-                      </span>
-                    </div>
-
-                    {previewFaqExpanded === 'faq-preview-2' && (
-                      <div className="mt-2.5 pt-2 border-t border-gray-100 text-[11px] text-gray-600 leading-relaxed animate-fade-in">
-                        외박 신청은 당일 오후 9시까지 명교생활관 모바일 포털 시스템에서 가능하며, 한 학기 최대 15일까지 허용됩니다.
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {/* Real Hero Section */}
+              {(previewSection === 'all' || previewSection === 'hero') && (
+                <HeroSection
+                  currentLang={previewLang}
+                  searchQuery={previewSearchText}
+                  setSearchQuery={setPreviewSearchText}
+                  selectedCategory={previewSelectedCategory as any}
+                  setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                />
               )}
 
-              {/* Preview Document Downloads Section */}
-              {(previewSection === 'all' || previewSection === 'docs') && (
-                <div className="p-4 space-y-2 bg-white border-t border-gray-200">
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1">
-                    <span className="flex items-center gap-1.5">
-                      <FileBadge className="w-3.5 h-3.5 text-blue-600" />
-                      <span>서식 자료실 미리보기</span>
-                    </span>
-                    <span className="text-[10px] text-gray-400">PDF / HWP / DOCX</span>
-                  </div>
+              {/* Search Results OR Tab Content */}
+              {previewSearchText.trim() !== '' ? (
+                <IntegratedSearchResults
+                  faqs={effectiveFaqs}
+                  documents={effectiveDocs}
+                  searchQuery={previewSearchText}
+                  onClearSearch={() => setPreviewSearchText('')}
+                  currentLang={previewLang}
+                  onNavigateTab={(tab) => {
+                    setPreviewSearchText('');
+                    if (tab === 'faq') { setPreviewTab('faq'); setPreviewSection('faq'); }
+                    else if (tab === 'downloads') { setPreviewTab('downloads'); setPreviewSection('docs'); }
+                    else if (tab === 'schedule') { setPreviewTab('schedule'); setPreviewSection('schedule'); }
+                    else if (tab === 'inquiry') { setPreviewTab('inquiry'); setPreviewSection('all'); }
+                  }}
+                />
+              ) : (
+                <>
+                  {/* Frequently Asked Questions */}
+                  {(previewSection === 'all' || previewSection === 'faq') && previewTab === 'faq' && (
+                    <FaqSection
+                      faqs={effectiveFaqs}
+                      currentLang={previewLang}
+                      selectedCategory={previewSelectedCategory as any}
+                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      searchQuery=""
+                    />
+                  )}
 
-                  <div
-                    className="p-2.5 border border-gray-200 bg-gray-50 flex items-center justify-between text-xs"
-                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                  >
-                    <div>
-                      <div className="font-bold text-gray-900">체류기간 연장허가 신청서 (통합신청서)</div>
-                      <div className="text-[10px] text-gray-500 font-mono">immigration_form.pdf (180 KB)</div>
-                    </div>
-                    <span
-                      className="px-2 py-1 rounded text-[10px] font-bold text-white shadow-2xs"
-                      style={{ backgroundColor: draftConfig.mainColor }}
-                    >
-                      다운로드
-                    </span>
-                  </div>
-                </div>
+                  {/* Downloads & Forms */}
+                  {(previewSection === 'all' || previewSection === 'docs') && previewTab === 'downloads' && (
+                    <DownloadsSection
+                      documents={effectiveDocs}
+                      currentLang={previewLang}
+                      selectedCategory={previewSelectedCategory}
+                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                    />
+                  )}
+
+                  {/* Academic Calendar */}
+                  {(previewSection === 'all' || previewSection === 'schedule') && previewTab === 'schedule' && (
+                    <ScheduleSection
+                      schedules={effectiveSchedules}
+                      currentLang={previewLang}
+                    />
+                  )}
+
+                  {/* 1:1 Inquiry */}
+                  {previewTab === 'inquiry' && (
+                    <InquirySection currentLang={previewLang} />
+                  )}
+                </>
               )}
 
-              {/* Preview Schedule Section */}
-              {(previewSection === 'all' || previewSection === 'schedule') && (
-                <div className="p-4 space-y-2 bg-[#f8fafc] border-t border-gray-200">
-                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>일정표 미리보기</span>
-                    </span>
-                    <span className="text-[10px] text-gray-500 font-semibold">2026학년도</span>
-                  </div>
-
-                  <div
-                    className="p-3 bg-white border border-gray-200 text-xs space-y-2"
-                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                  >
-                    <div className="flex items-center gap-1 border-b border-gray-100 pb-1 text-[11px] font-semibold text-gray-600">
-                      <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-900 font-bold">봄학기</span>
-                      <span className="px-2 py-0.5 rounded text-gray-500">여름학기</span>
-                      <span className="px-2 py-0.5 rounded text-gray-500">가을학기</span>
-                      <span className="px-2 py-0.5 rounded text-gray-500">겨울학기</span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px]">
-                      <div>
-                        <span className="font-bold text-gray-900 block">한국어학당 정규과정 개강일</span>
-                        <span className="text-[10px] text-gray-400 font-mono">2026-03-02</span>
-                      </div>
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                        style={{ backgroundColor: draftConfig.accentColor }}
-                      >
-                        주요 학사
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Preview Footer */}
-              <div className="p-4 bg-[#243447] text-white text-[10px] space-y-2 border-t border-gray-700">
-                <div className="flex justify-between items-center text-gray-300">
-                  <span>{draftConfig.phone}</span>
-                  <span>{draftConfig.email}</span>
-                </div>
-                <div className="text-gray-400 truncate">
-                  {draftConfig.location}
-                </div>
-                {draftConfig.showRelatedSites !== false && (
-                  <div className="pt-1.5 border-t border-gray-700/60 text-[9px] text-gray-400 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-gray-300 font-semibold">관련 사이트:</span>
-                    <span className="text-blue-300">하이코리아</span>
-                    <span>•</span>
-                    <span className="text-blue-300">TOPIK</span>
-                    <span>•</span>
-                    <span className="text-blue-300">스터디인코리아</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 pt-1 border-t border-gray-700/60 text-gray-400">
-                  <span className="font-semibold text-gray-300">SNS:</span>
-                  {draftConfig.showInstagram && <span className="text-pink-400">Instagram</span>}
-                  {draftConfig.showYoutube && <span className="text-red-400">YouTube</span>}
-                </div>
-              </div>
+              {/* Real Footer */}
+              <Footer currentLang={previewLang} />
             </div>
           </div>
         </div>
@@ -2757,90 +2645,73 @@ export const ThemeCustomizer: React.FC = () => {
             </div>
 
             {/* Modal Body iframe-like container */}
-            <div className="flex-1 overflow-y-auto bg-gray-50">
-              {/* Header */}
-              <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-                <div className="flex items-center gap-3">
-                  {draftConfig.logoType && draftConfig.logoType !== 'none' && (
-                    <KmuLogo config={draftConfig} />
-                  )}
-                  <span className="font-bold text-sm sm:text-base text-gray-900">
-                    {draftConfig.heroTitle}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-bold text-xs">
-                    KO 한국어
-                  </span>
-                </div>
-              </header>
-
-              {/* Hero Banner */}
-              <div
-                className="py-12 px-6 text-center text-white"
-                style={{
-                  backgroundColor: draftConfig.bgType === 'campus' ? undefined : draftConfig.mainColor,
-                  backgroundImage:
-                    draftConfig.bgType === 'campus'
-                      ? 'linear-gradient(rgba(18, 40, 75, 0.88), rgba(26, 59, 107, 0.94)), url("https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80")'
-                      : undefined,
-                  backgroundSize: 'cover',
+            <div className="flex-1 overflow-y-auto bg-[#F7F8F9]">
+              <Navbar
+                currentLang={previewLang}
+                onLanguageChange={setPreviewLang}
+                activeTab={previewTab}
+                setActiveTab={(tab) => {
+                  if (tab !== 'admin') {
+                    setPreviewTab(tab as any);
+                  }
                 }}
-              >
-                <h1 className="text-xl sm:text-2xl font-extrabold mb-4">
-                  {draftConfig.heroTitle}
-                </h1>
-                <p className="text-xs sm:text-sm text-blue-100 max-w-xl mx-auto mb-6">
-                  {draftConfig.heroSubtitle}
-                </p>
+              />
 
-                {/* Search Bar */}
-                <div
-                  className="bg-white p-1.5 flex items-center shadow-lg text-xs text-gray-800 max-w-lg mx-auto"
-                  style={{ borderRadius: `${draftConfig.searchBarRadius ?? draftConfig.borderRadius ?? 8}px` }}
-                >
-                  <span className="px-3 text-gray-400 text-sm">🔍</span>
-                  <input
-                    type="text"
-                    placeholder={draftConfig.searchPlaceholder}
-                    className="flex-1 outline-none text-xs text-gray-800 bg-transparent"
-                  />
-                  <button
-                    type="button"
-                    className="font-bold text-white px-4 py-2 text-xs flex items-center gap-1 shadow-xs"
-                    style={{
-                      backgroundColor:
-                        draftConfig.searchButtonColor || draftConfig.accentColor || draftConfig.mainColor,
-                      borderRadius: `${draftConfig.searchButtonRadius ?? 6}px`,
-                    }}
-                  >
-                    <span>{draftConfig.searchButtonText || '검색'}</span>
-                  </button>
+              <HeroSection
+                currentLang={previewLang}
+                searchQuery={previewSearchText}
+                setSearchQuery={setPreviewSearchText}
+                selectedCategory={previewSelectedCategory as any}
+                setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+              />
+
+              {previewSearchText.trim() !== '' ? (
+                <IntegratedSearchResults
+                  faqs={effectiveFaqs}
+                  documents={effectiveDocs}
+                  searchQuery={previewSearchText}
+                  onClearSearch={() => setPreviewSearchText('')}
+                  currentLang={previewLang}
+                  onNavigateTab={(tab) => {
+                    setPreviewSearchText('');
+                    if (tab === 'faq') setPreviewTab('faq');
+                    else if (tab === 'downloads') setPreviewTab('downloads');
+                    else if (tab === 'schedule') setPreviewTab('schedule');
+                    else if (tab === 'inquiry') setPreviewTab('inquiry');
+                  }}
+                />
+              ) : (
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+                  {previewTab === 'faq' && (
+                    <FaqSection
+                      faqs={effectiveFaqs}
+                      currentLang={previewLang}
+                      selectedCategory={previewSelectedCategory as any}
+                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      searchQuery=""
+                    />
+                  )}
+                  {previewTab === 'downloads' && (
+                    <DownloadsSection
+                      documents={effectiveDocs}
+                      currentLang={previewLang}
+                      selectedCategory={previewSelectedCategory}
+                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                    />
+                  )}
+                  {previewTab === 'schedule' && (
+                    <ScheduleSection
+                      schedules={effectiveSchedules}
+                      currentLang={previewLang}
+                    />
+                  )}
+                  {previewTab === 'inquiry' && (
+                    <InquirySection currentLang={previewLang} />
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Sample Content */}
-              <div className="max-w-4xl mx-auto p-6 space-y-6">
-                <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-xs">
-                  <h3 className="font-bold text-gray-900 text-sm mb-3">자주 묻는 질문 (FAQ)</h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between font-semibold text-gray-800">
-                      <span>D-4 비자 연장 및 등록금 납부 증명서 발급 안내</span>
-                      <span>▼</span>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between font-semibold text-gray-800">
-                      <span>외국인 유학생 건강보험 의무가입 및 진료비 지원</span>
-                      <span>▼</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <footer className="bg-[#243447] text-white p-6 text-xs text-center space-y-1">
-                <div>계명대학교 한국어학당 국제처 유학생지원팀</div>
-                <div className="text-gray-400 text-[11px]">{draftConfig.location} | TEL: {draftConfig.phone}</div>
-              </footer>
+              <Footer currentLang={previewLang} />
             </div>
           </div>
         </div>

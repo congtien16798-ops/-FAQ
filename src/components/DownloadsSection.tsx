@@ -9,17 +9,23 @@ import { triggerDocumentDownload } from '../services/downloadHelper';
 interface DownloadsSectionProps {
   documents: DocumentItem[];
   currentLang: Language;
+  selectedCategory?: string;
+  setSelectedCategory?: (cat: string) => void;
 }
 
 export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   documents,
   currentLang,
+  selectedCategory: propCategory,
+  setSelectedCategory: propSetCategory,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
 
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [internalCategory, setInternalCategory] = useState<string>('all');
+  const selectedCategory = propCategory !== undefined ? propCategory : internalCategory;
+  const setSelectedCategory = propSetCategory || setInternalCategory;
   const [downloadSuccessToast, setDownloadSuccessToast] = useState<string | null>(null);
 
   // Auto Translation State
@@ -58,8 +64,17 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
     };
   }, [currentLang, documents]);
 
-  // Extract unique categories
-  const categories = ['all', ...Array.from(new Set((documents || []).filter((d) => !d?.hidden).map((d) => d?.category).filter(Boolean)))];
+  // Extract unique categories (excluding 'all' from set to avoid duplicate with initial 'all')
+  const categories = [
+    'all',
+    ...Array.from(
+      new Set(
+        (documents || [])
+          .filter((d) => !d?.hidden && d?.category && d.category.trim() !== 'all')
+          .map((d) => d.category.trim())
+      )
+    ),
+  ];
 
   const filteredDocs = (documents || []).filter((doc) => {
     if (!doc || doc.hidden) return false;
@@ -135,9 +150,9 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
       <div className="bg-white rounded-md border border-[#E2E5E8] p-3 mb-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Category Filter Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
-          {categories.map((cat) => (
+          {categories.map((cat, idx) => (
             <button
-              key={cat}
+              key={`doc-filter-cat-${cat}-${idx}`}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 cursor-pointer min-h-[32px] flex items-center ${
                 selectedCategory === cat
@@ -182,23 +197,24 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
           <>
             {/* MOBILE VIEW (< 640px): Touch-Friendly Cards */}
             <div className="block sm:hidden divide-y divide-gray-100">
-              {filteredDocs.map((doc) => {
-                const formatBadge = getFormatBadge(doc.fileType);
+              {filteredDocs.map((doc, idx) => {
+                const formatBadge = getFormatBadge(doc?.fileType);
+                const docId = doc?.id || `fallback-id-${idx}`;
                 const docTitle =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.title
-                    ? transDocMap[doc.id].title
+                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
+                    ? transDocMap[docId].title
                     : doc.title;
                 const docDesc =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.description
-                    ? transDocMap[doc.id].description
+                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
+                    ? transDocMap[docId].description
                     : doc.description;
                 const docCategory =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.category
-                    ? transDocMap[doc.id].category
+                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
+                    ? transDocMap[docId].category
                     : doc.category;
 
                 return (
-                  <div key={doc.id} className="p-3.5 space-y-2 hover:bg-blue-50/20 transition-colors">
+                  <div key={`doc-card-${docId}-${idx}`} className="p-3.5 space-y-2 hover:bg-blue-50/20 transition-colors">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
                         <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
@@ -250,24 +266,25 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-gray-800">
-                  {filteredDocs.map((doc) => {
-                    const formatBadge = getFormatBadge(doc.fileType);
+                  {filteredDocs.map((doc, idx) => {
+                    const formatBadge = getFormatBadge(doc?.fileType);
+                    const docId = doc?.id || `fallback-id-${idx}`;
                     const docTitle =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.title
-                        ? transDocMap[doc.id].title
+                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
+                        ? transDocMap[docId].title
                         : doc.title;
                     const docDesc =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.description
-                        ? transDocMap[doc.id].description
+                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
+                        ? transDocMap[docId].description
                         : doc.description;
                     const docCategory =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[doc.id]?.category
-                        ? transDocMap[doc.id].category
+                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
+                        ? transDocMap[docId].category
                         : doc.category;
 
                     return (
                       <tr
-                        key={doc.id}
+                        key={`doc-row-${docId}-${idx}`}
                         className="hover:bg-blue-50/30 transition-colors"
                       >
                         {/* Category */}

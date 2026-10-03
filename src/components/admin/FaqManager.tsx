@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Plus,
   Edit2,
@@ -48,6 +48,12 @@ const POPULAR_CATEGORY_ICONS = [
   { id: 'HelpCircle', label: '일반/기타', icon: HelpCircle },
 ];
 
+const renderCategoryIcon = (iconName?: string) => {
+  const matched = POPULAR_CATEGORY_ICONS.find((item) => item.id === iconName);
+  const IconComp = matched ? matched.icon : HelpCircle;
+  return <IconComp className="w-4 h-4" />;
+};
+
 export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
   const { user } = useAuth();
   const { config, updateConfig } = useTheme();
@@ -85,10 +91,6 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [catId, setCatId] = useState('');
   const [catNameKo, setCatNameKo] = useState('');
-  const [catNameEn, setCatNameEn] = useState('');
-  const [catNameVi, setCatNameVi] = useState('');
-  const [catNameZh, setCatNameZh] = useState('');
-  const [catNameMn, setCatNameMn] = useState('');
   const [catIcon, setCatIcon] = useState('HelpCircle');
   const [deleteCatTarget, setDeleteCatTarget] = useState<CategoryItem | null>(null);
 
@@ -99,9 +101,46 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
+  // Auto-prune empty FAQ posts (내용없고 빈 게시글 자동 삭제)
+  useEffect(() => {
+    if (!faqs || faqs.length === 0) return;
+    const emptyItems = faqs.filter((f) => {
+      if (!f) return true;
+      const noTitle = !f.title || f.title.trim() === '';
+      const plainContent = (f.content || '').replace(/<[^>]*>/g, '').trim();
+      const noContent = plainContent === '' && !f.imageUrl && !(f.content || '').includes('<img');
+      return noTitle || noContent;
+    });
+
+    if (emptyItems.length > 0) {
+      const validOnly = faqs.filter((f) => !emptyItems.includes(f));
+      setFaqs(validOnly);
+      try {
+        localStorage.setItem('kmu_faqs_cache', JSON.stringify(validOnly));
+      } catch {
+        // ignore
+      }
+      emptyItems.forEach(async (item) => {
+        if (item?.id) {
+          try {
+            await deleteDoc(doc(db, 'faqs', item.id));
+          } catch {
+            // ignore
+          }
+        }
+      });
+    }
+  }, [faqs, setFaqs]);
+
   // Filtered FAQs
   const filteredFaqs = (faqs || []).filter((faq) => {
     if (!faq) return false;
+    // Exclude empty posts
+    const noTitle = !faq.title || faq.title.trim() === '';
+    const plainContent = (faq.content || '').replace(/<[^>]*>/g, '').trim();
+    const noContent = plainContent === '' && !faq.imageUrl && !(faq.content || '').includes('<img');
+    if (noTitle || noContent) return false;
+
     const matchesCat = categoryFilter === 'all' || faq.category === categoryFilter;
     if (!matchesCat) return false;
     if (visibilityFilter === 'visible' && faq.hidden) return false;
@@ -272,8 +311,17 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !content.trim()) {
-      showToast('제목과 내용을 모두 입력해 주세요.');
+    const cleanTitle = title.trim();
+    const plainContent = content.replace(/<[^>]*>/g, '').trim();
+    const hasRichContent = plainContent !== '' || !!imageUrl.trim() || content.includes('<img');
+
+    if (!cleanTitle) {
+      showToast('FAQ 제목을 입력해 주세요.');
+      return;
+    }
+
+    if (!hasRichContent) {
+      showToast('답변 내용을 입력해 주세요. 내용이 없는 빈 게시글은 등록할 수 없습니다.');
       return;
     }
 
@@ -346,10 +394,6 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setEditingCategory(null);
     setCatId('');
     setCatNameKo('');
-    setCatNameEn('');
-    setCatNameVi('');
-    setCatNameZh('');
-    setCatNameMn('');
     setCatIcon('HelpCircle');
     setIsAddingCategory(true);
   };
@@ -358,10 +402,6 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setEditingCategory(cat);
     setCatId(cat.id);
     setCatNameKo(cat.name.ko || '');
-    setCatNameEn(cat.name.en || '');
-    setCatNameVi(cat.name.vi || '');
-    setCatNameZh(cat.name.zh || '');
-    setCatNameMn(cat.name.mn || '');
     setCatIcon(cat.icon || 'HelpCircle');
     setIsAddingCategory(true);
   };
@@ -374,14 +414,15 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     }
 
     const cleanId = catId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    const cleanKo = catNameKo.trim();
     const newCategory: CategoryItem = {
       id: cleanId,
       name: {
-        ko: catNameKo.trim(),
-        en: catNameEn.trim() || undefined,
-        vi: catNameVi.trim() || undefined,
-        zh: catNameZh.trim() || undefined,
-        mn: catNameMn.trim() || undefined,
+        ko: cleanKo,
+        en: cleanKo,
+        vi: cleanKo,
+        zh: cleanKo,
+        mn: cleanKo,
       },
       icon: catIcon,
     };
@@ -747,9 +788,9 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
               <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-bold">
                 <tr>
                   <th className="py-2.5 px-3 w-16 text-center">순서</th>
-                  <th className="py-2.5 px-3 w-32">카테고리 ID</th>
-                  <th className="py-2.5 px-3">한국어 명칭</th>
-                  <th className="py-2.5 px-3">다국어 표기 (EN / VI / ZH / MN)</th>
+                  <th className="py-2.5 px-3 w-20 text-center">아이콘</th>
+                  <th className="py-2.5 px-3 w-36">카테고리 ID</th>
+                  <th className="py-2.5 px-3">카테고리 명칭 (한국어)</th>
                   <th className="py-2.5 px-3 w-24 text-center">연결 FAQ</th>
                   <th className="py-2.5 px-3 w-28 text-center">관리</th>
                 </tr>
@@ -782,23 +823,18 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
                         </div>
                       </td>
 
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-blue-50 text-[#1A3B6B]">
+                          {renderCategoryIcon(cat.icon)}
+                        </span>
+                      </td>
+
                       <td className="py-2.5 px-3 font-mono font-bold text-gray-700">
                         {cat.id}
                       </td>
 
                       <td className="py-2.5 px-3 font-bold text-gray-900">
                         {cat.name.ko}
-                      </td>
-
-                      <td className="py-2.5 px-3 text-gray-500 text-[11px]">
-                        <div>
-                          {cat.name.en && <span className="mr-2 text-blue-700">EN: {cat.name.en}</span>}
-                          {cat.name.vi && <span className="mr-2 text-emerald-700">VI: {cat.name.vi}</span>}
-                        </div>
-                        <div>
-                          {cat.name.zh && <span className="mr-2 text-purple-700">ZH: {cat.name.zh}</span>}
-                          {cat.name.mn && <span className="text-amber-700">MN: {cat.name.mn}</span>}
-                        </div>
                       </td>
 
                       <td className="py-2.5 px-3 text-center">
@@ -1038,52 +1074,6 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
                   placeholder="예: 장학금/등록금"
                   className="w-full px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B]"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div>
-                  <label className="block font-semibold text-gray-600 mb-1">영문 표기 (EN)</label>
-                  <input
-                    type="text"
-                    value={catNameEn}
-                    onChange={(e) => setCatNameEn(e.target.value)}
-                    placeholder="e.g. Scholarship"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-600 mb-1">베트남어 표기 (VI)</label>
-                  <input
-                    type="text"
-                    value={catNameVi}
-                    onChange={(e) => setCatNameVi(e.target.value)}
-                    placeholder="Học bổng"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-gray-600 mb-1">중국어 표기 (ZH)</label>
-                  <input
-                    type="text"
-                    value={catNameZh}
-                    onChange={(e) => setCatNameZh(e.target.value)}
-                    placeholder="奖学金"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-600 mb-1">몽골어 표기 (MN)</label>
-                  <input
-                    type="text"
-                    value={catNameMn}
-                    onChange={(e) => setCatNameMn(e.target.value)}
-                    placeholder="Тэтгэлэг"
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300"
-                  />
-                </div>
               </div>
 
               {/* Icon Selector */}

@@ -189,3 +189,15 @@ export interface ConfigArchiveItem {
   note?: string;
   configSnapshot: SiteConfig;
 }
+
+export interface AdminAccount {
+  id: string;
+  email: string;
+  name: string;
+  role: 'super_admin' | 'admin' | 'editor';
+  department?: string;
+  phone?: string;
+  note?: string;
+  createdAt: string;
+  lastLoginAt?: string;
+}
