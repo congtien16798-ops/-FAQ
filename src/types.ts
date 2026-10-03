@@ -180,3 +180,12 @@ export interface SiteConfig {
   updatedAt?: string;
   updatedBy?: string;
 }
+
+export interface ConfigArchiveItem {
+  id: string;
+  timestamp: string;
+  title: string;
+  author?: string;
+  note?: string;
+  configSnapshot: SiteConfig;
+}

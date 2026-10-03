@@ -735,13 +735,17 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
               {/* Action 2: Permanent Delete */}
               <button
                 type="button"
-                onClick={() => handlePermanentDelete(deleteTarget.id)}
+                onClick={() => {
+                  const target = deleteTarget;
+                  setDeleteTarget(null);
+                  setConfirmPermanentTarget(target);
+                }}
                 className="w-full text-left p-3 rounded-lg border border-red-200 bg-red-50/70 hover:bg-red-100 transition-all flex items-start gap-3 cursor-pointer group"
               >
                 <Trash2 className="w-5 h-5 text-red-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                 <div>
                   <div className="font-bold text-red-800 text-xs sm:text-sm">
-                    완전 영구 삭제
+                    영구 삭제
                   </div>
                   <div className="text-[11px] text-red-600 mt-0.5">
                     데이터베이스 및 목록에서 완전히 삭제하며 복구할 수 없습니다.
@@ -757,6 +761,43 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                 className="px-4 py-2 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 cursor-pointer"
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECOND CONFIRMATION MODAL FOR PERMANENT DELETE */}
+      {confirmPermanentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-5 sm:p-6 border border-red-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-2.5 text-red-600 mb-3 font-bold text-base">
+              <AlertTriangle className="w-5 h-5 shrink-0 text-red-600" />
+              <span>영구 삭제 재확인</span>
+            </div>
+            <p className="text-xs text-gray-700 leading-relaxed mb-4">
+              정말 <strong className="text-gray-900 font-bold">'{confirmPermanentTarget.title}'</strong> 일정을 영구 삭제하시겠습니까?
+              <br />
+              <span className="text-red-600 font-semibold block mt-1">※ 삭제된 데이터는 복구할 수 없습니다.</span>
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setConfirmPermanentTarget(null)}
+                className="px-3.5 py-1.5 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handlePermanentDelete(confirmPermanentTarget.id);
+                  setConfirmPermanentTarget(null);
+                }}
+                className="px-3.5 py-1.5 rounded text-xs font-bold text-white bg-red-600 hover:bg-red-700 flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>영구 삭제</span>
               </button>
             </div>
           </div>

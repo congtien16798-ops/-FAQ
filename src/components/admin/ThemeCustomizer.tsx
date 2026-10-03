@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Palette, 
   Layout, 
@@ -44,40 +44,68 @@ import {
   GripVertical,
   ChevronUp,
   ChevronDown,
-  Link2
+  Link2,
+  Upload,
+  Smartphone,
+  Tablet,
+  Monitor,
+  Archive,
+  History,
+  Maximize2,
+  Minimize2,
+  FileCheck,
+  FolderArchive
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { KmuLogo } from '../KmuLogo';
 import { NoticePopup } from '../NoticePopup';
-import { LogoType, PopupStyle, PopupIconType, CategoryItem, RelatedSite } from '../../types';
+import { LogoType, PopupStyle, PopupIconType, CategoryItem, RelatedSite, ConfigArchiveItem } from '../../types';
 import { DEFAULT_RELATED_SITES } from '../../constants/initialRelatedSites';
 
 export const ThemeCustomizer: React.FC = () => {
   const {
     config,
     draftConfig,
+    archives,
     updateDraft,
     saveDraftToLive,
     resetDraftToLive,
     resetToFactoryDefaults,
+    createArchiveSnapshot,
+    restoreArchive,
+    deleteArchive,
     isSaving,
     saveMessage,
     setIsDesignMode,
   } = useTheme();
 
   const [activeCategoryTab, setActiveCategoryTab] = useState<
-    'brand' | 'logo' | 'hero' | 'categories' | 'popup' | 'footer' | 'mood' | 'chatbot'
+    'brand' | 'logo' | 'hero' | 'archive' | 'popup' | 'footer' | 'mood' | 'chatbot'
   >('brand');
   const [draftSavedToast, setDraftSavedToast] = useState(false);
   const [previewPopupOpen, setPreviewPopupOpen] = useState(false);
   const [logoPreviewBgDark, setLogoPreviewBgDark] = useState(false);
+  const [logoFileNotice, setLogoFileNotice] = useState<string | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Category Editor State
-  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCatId, setNewCatId] = useState('');
-  const [newCatKo, setNewCatKo] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('FileBadge');
+  // Archive & Publishing States (요청 6: 적용하기 / 게시하기 및 보관)
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [publishVersionTitle, setPublishVersionTitle] = useState('');
+  const [isCreatingManualArchive, setIsCreatingManualArchive] = useState(false);
+  const [manualArchiveTitle, setManualArchiveTitle] = useState('');
+  const [manualArchiveNote, setManualArchiveNote] = useState('');
+  const [archiveActionToast, setArchiveActionToast] = useState<string | null>(null);
+  const [restoreConfirmTarget, setRestoreConfirmTarget] = useState<ConfigArchiveItem | null>(null);
+  const [deleteArchiveTarget, setDeleteArchiveTarget] = useState<ConfigArchiveItem | null>(null);
+
+  // Live Preview Enhancement States (요청 8: 실시간 미리보기 보완 및 개선)
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [previewSection, setPreviewSection] = useState<'all' | 'hero' | 'faq' | 'docs' | 'schedule' | 'popup'>('all');
+  const [previewLang, setPreviewLang] = useState<'ko' | 'en' | 'vi' | 'zh' | 'mn'>('ko');
+  const [previewFaqExpanded, setPreviewFaqExpanded] = useState<string | null>('faq-preview-1');
+  const [previewSearchText, setPreviewSearchText] = useState('');
+  const [previewSelectedCategory, setPreviewSelectedCategory] = useState<string>('all');
+  const [isFullScreenPreview, setIsFullScreenPreview] = useState(false);
 
   // Preset themes
   const presets = [
@@ -125,53 +153,80 @@ export const ThemeCustomizer: React.FC = () => {
     setTimeout(() => setDraftSavedToast(false), 2500);
   };
 
-  const handlePublish = async () => {
-    await saveDraftToLive();
+  const handleOpenPublishModal = () => {
+    const now = new Date();
+    setPublishVersionTitle(
+      `게시본 (${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })})`
+    );
+    setShowPublishModal(true);
   };
 
-  const handleAddCategorySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatId.trim() || !newCatKo.trim()) {
-      alert('카테고리 ID와 한국어 명칭을 입력해 주세요.');
+  const handlePublishSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    await saveDraftToLive(publishVersionTitle || undefined);
+    setShowPublishModal(false);
+    setPublishVersionTitle('');
+  };
+
+  // Logo file upload handler (요청 7: 로고 이미지 파일 업로드 기능)
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    processLogoFile(files[0]);
+  };
+
+  const processLogoFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('이미지 파일(PNG, JPG, SVG, WebP)만 업로드할 수 있습니다.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('로고 파일 용량은 5MB 이하로 업로드해 주세요.');
       return;
     }
 
-    const cleanId = newCatId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    const currentCats = draftConfig.categories || [];
-    if (currentCats.some(c => c.id === cleanId)) {
-      alert('이미 존재하는 카테고리 ID입니다. 다른 ID를 입력해 주세요.');
-      return;
-    }
-
-    const newCategory: CategoryItem = {
-      id: cleanId,
-      name: {
-        ko: newCatKo.trim(),
-      },
-      icon: newCatIcon,
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        updateDraft({
+          logoType: 'image',
+          logoUrl: dataUrl,
+        });
+        setLogoFileNotice(`✓ 로고 업로드 성공: ${file.name} (${Math.round(file.size / 1024)} KB)`);
+      }
     };
-
-    updateDraft({
-      categories: [...currentCats, newCategory],
-    });
-
-    // Reset Form
-    setNewCatId('');
-    setNewCatKo('');
-    setIsAddingCategory(false);
+    reader.readAsDataURL(file);
   };
 
-  const handleUpdateCategory = (cat: CategoryItem) => {
-    const updated = (draftConfig.categories || []).map(c => (c.id === cat.id ? cat : c));
-    updateDraft({ categories: updated });
-    setEditingCategory(null);
+  // Manual archive snapshot creation (요청 6: 수정 후 보관 기능)
+  const handleCreateManualArchive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createArchiveSnapshot(manualArchiveTitle, manualArchiveNote);
+    setManualArchiveTitle('');
+    setManualArchiveNote('');
+    setIsCreatingManualArchive(false);
+    setArchiveActionToast('현재 설정이 보관함에 안전하게 백업되었습니다.');
+    setTimeout(() => setArchiveActionToast(null), 3000);
   };
 
-  const handleDeleteCategory = (catId: string) => {
-    if (window.confirm('정말 이 카테고리를 삭제하시겠습니까? 관련 FAQ의 카테고리 태그도 영향을 받을 수 있습니다.')) {
-      const filtered = (draftConfig.categories || []).filter(c => c.id !== catId);
-      updateDraft({ categories: filtered });
-    }
+  const handleRestoreArchiveConfirmed = async () => {
+    if (!restoreConfirmTarget) return;
+    await restoreArchive(restoreConfirmTarget.id, false);
+    setRestoreConfirmTarget(null);
+    setArchiveActionToast(`'${restoreConfirmTarget.title}' 버전이 실시간 포털에 복원되었습니다.`);
+    setTimeout(() => setArchiveActionToast(null), 3000);
+  };
+
+  const handleDeleteArchiveConfirmed = async () => {
+    if (!deleteArchiveTarget) return;
+    await deleteArchive(deleteArchiveTarget.id);
+    setDeleteArchiveTarget(null);
+    setArchiveActionToast('보관된 버전 기록이 삭제되었습니다.');
+    setTimeout(() => setArchiveActionToast(null), 3000);
   };
 
   // Related Sites Editor State & Handlers
@@ -302,6 +357,13 @@ export const ThemeCustomizer: React.FC = () => {
             </span>
           )}
 
+          {archiveActionToast && (
+            <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded border border-purple-200 animate-fade-in flex items-center gap-1">
+              <Archive className="w-3.5 h-3.5 text-purple-600" />
+              {archiveActionToast}
+            </span>
+          )}
+
           {draftSavedToast && (
             <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded border border-blue-200 animate-fade-in flex items-center gap-1">
               <Check className="w-3.5 h-3.5" />
@@ -311,7 +373,7 @@ export const ThemeCustomizer: React.FC = () => {
 
           <button
             onClick={() => setIsDesignMode(false)}
-            className="px-3 py-1.5 rounded text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="px-3 py-1.5 rounded text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer"
           >
             편집 종료
           </button>
@@ -319,7 +381,7 @@ export const ThemeCustomizer: React.FC = () => {
           <button
             onClick={resetDraftToLive}
             title="현재 서버에 저장된 상태로 되돌리기"
-            className="px-3 py-1.5 rounded text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1"
+            className="px-3 py-1.5 rounded text-xs font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>원복</span>
@@ -332,27 +394,48 @@ export const ThemeCustomizer: React.FC = () => {
               }
             }}
             title="출고 초기값으로 재설정"
-            className="px-2.5 py-1.5 rounded text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+            className="px-2.5 py-1.5 rounded text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
           >
             초기화
           </button>
 
           <button
             onClick={handleSaveDraft}
-            className="px-3.5 py-1.5 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-colors flex items-center gap-1"
+            className="px-3 py-1.5 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <Save className="w-3.5 h-3.5 text-gray-500" />
             <span>임시 저장</span>
           </button>
 
+          {/* Manual Snapshot Backup Button */}
           <button
-            onClick={handlePublish}
+            onClick={() => {
+              const now = new Date();
+              setManualArchiveTitle(
+                `디자인 백업 (${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })})`
+              );
+              setManualArchiveNote('');
+              setIsCreatingManualArchive(true);
+            }}
+            className="px-3 py-1.5 rounded text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 cursor-pointer"
+            title="현재 설정을 버전 보관함에 즉시 백업"
+          >
+            <Archive className="w-3.5 h-3.5 text-purple-600" />
+            <span>현재 설정 보관</span>
+          </button>
+
+          {/* Publish / Apply Button */}
+          <button
+            onClick={handleOpenPublishModal}
             disabled={isSaving}
-            className="px-4 py-1.5 rounded text-xs font-bold text-white transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+            className="px-4 py-1.5 rounded text-xs font-bold text-white transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             style={{ backgroundColor: draftConfig.mainColor || '#1A3B6B' }}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>{isSaving ? '배포 중...' : '적용하기 (학생 화면 반영)'}</span>
+            <span>{isSaving ? '게시 중...' : '적용하기 / 게시하기'}</span>
           </button>
         </div>
       </div>
@@ -381,7 +464,7 @@ export const ThemeCustomizer: React.FC = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              로고 디자인
+              로고 편집
             </button>
             <button
               onClick={() => setActiveCategoryTab('hero')}
@@ -394,15 +477,15 @@ export const ThemeCustomizer: React.FC = () => {
               메인 배너/검색
             </button>
             <button
-              onClick={() => setActiveCategoryTab('categories')}
+              onClick={() => setActiveCategoryTab('archive')}
               className={`py-2.5 px-3 font-semibold text-center border-b-2 transition-colors whitespace-nowrap flex items-center gap-1 ${
-                activeCategoryTab === 'categories'
+                activeCategoryTab === 'archive'
                   ? 'border-[#1A3B6B] text-[#1A3B6B] bg-white'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              <Tags className="w-3.5 h-3.5 text-blue-600" />
-              <span>카테고리 관리</span>
+              <Archive className="w-3.5 h-3.5 text-purple-600" />
+              <span>보관함 ({archives.length})</span>
             </button>
             <button
               onClick={() => setActiveCategoryTab('popup')}
@@ -444,7 +527,7 @@ export const ThemeCustomizer: React.FC = () => {
               }`}
             >
               <Bot className="w-3.5 h-3.5 text-blue-600" />
-              <span>AI 챗봇</span>
+              <span>챗봇</span>
             </button>
           </div>
 
@@ -724,12 +807,96 @@ export const ThemeCustomizer: React.FC = () => {
                   </div>
                 )}
 
-                {/* Sub Options for Image */}
+                {/* Sub Options for Image with File Upload */}
                 {draftConfig.logoType === 'image' && (
-                  <div className="space-y-3 pt-3 border-t border-gray-100">
+                  <div className="space-y-4 pt-3 border-t border-gray-100">
                     <div>
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        로고 이미지 URL
+                      <label className="block font-bold text-gray-800 text-xs mb-1.5 flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-[#1A3B6B]" />
+                        <span>로고 이미지 파일 직접 업로드 (PC 파일 선택)</span>
+                      </label>
+                      
+                      <input
+                        type="file"
+                        ref={logoFileInputRef}
+                        onChange={handleLogoFileSelect}
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                        className="hidden"
+                      />
+
+                      <div
+                        onClick={() => logoFileInputRef.current?.click()}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            processLogoFile(e.dataTransfer.files[0]);
+                          }
+                        }}
+                        className="border-2 border-dashed border-gray-300 hover:border-[#1A3B6B] hover:bg-blue-50/30 p-4 rounded-lg text-center cursor-pointer transition-all group"
+                      >
+                        <Upload className="w-6 h-6 text-gray-400 group-hover:text-[#1A3B6B] mx-auto mb-1.5 transition-colors" />
+                        <p className="font-bold text-gray-800 text-xs">
+                          클릭하여 로고 이미지 파일을 선택하거나 여기로 드래그하세요
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          지원 포맷: PNG, SVG, JPG, WebP (배경이 투명한 PNG/SVG 권장)
+                        </p>
+                      </div>
+
+                      {logoFileNotice && (
+                        <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-xs font-semibold flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{logoFileNotice}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Current Logo Preview Thumbnail */}
+                    {draftConfig.logoUrl && (
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-bold text-gray-700">등록된 로고 이미지:</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setLogoPreviewBgDark(!logoPreviewBgDark)}
+                              className="text-[10px] px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 cursor-pointer"
+                            >
+                              {logoPreviewBgDark ? '밝은 배경' : '어두운 배경'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateDraft({ logoUrl: '' });
+                                setLogoFileNotice(null);
+                              }}
+                              className="text-[10px] px-2 py-0.5 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 cursor-pointer"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                        <div
+                          className={`p-3 rounded border flex items-center justify-center transition-colors ${
+                            logoPreviewBgDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'
+                          }`}
+                          style={{ minHeight: '60px' }}
+                        >
+                          <img
+                            src={draftConfig.logoUrl}
+                            alt="로고 미리보기"
+                            style={{ maxHeight: `${draftConfig.logoHeight || 40}px` }}
+                            className="w-auto object-contain block"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alternative URL Input */}
+                    <div>
+                      <label className="block font-semibold text-gray-700 mb-1 text-xs">
+                        또는 이미지 웹 URL 직접 입력
                       </label>
                       <input
                         type="text"
@@ -739,12 +906,17 @@ export const ThemeCustomizer: React.FC = () => {
                         className="w-full px-2.5 py-1.5 rounded border border-gray-200 bg-gray-50 focus:bg-white text-xs"
                       />
                     </div>
+
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateDraft({ logoUrl: '/kmu_type67_view.jpg' })}
-                        className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-semibold hover:bg-blue-100 transition-colors"
+                        type="button"
+                        onClick={() => {
+                          updateDraft({ logoUrl: '/kmu_type67_view.jpg' });
+                          setLogoFileNotice('✓ 계명대학교 공식 기본 워드마크로 지정되었습니다.');
+                        }}
+                        className="px-2.5 py-1.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors cursor-pointer"
                       >
-                        계명대 공식 워드마크 설정
+                        계명대 공식 기본 워드마크 설정
                       </button>
                     </div>
                   </div>
@@ -1034,124 +1206,63 @@ export const ThemeCustomizer: React.FC = () => {
               </div>
             )}
 
-            {/* TAB 4: Category Management */}
-            {activeCategoryTab === 'categories' && (
+            {/* TAB 4: Version Archive & Backup (요청 6: 수정 및 변경 후 적용하기 또는 게시하기 기능 추가 및 보관) */}
+            {activeCategoryTab === 'archive' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-end">
-                  <button
-                    onClick={() => {
-                      setIsAddingCategory(!isAddingCategory);
-                      setEditingCategory(null);
-                    }}
-                    className="px-2.5 py-1 rounded bg-[#1A3B6B] hover:bg-[#122a4d] text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>새 카테고리</span>
-                  </button>
+                <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-lg text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                      <Archive className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-purple-950 block">디자인 및 설정 버전 보관함</span>
+                        <p className="text-purple-800/90 text-[11px] mt-0.5 leading-relaxed">
+                          '적용하기 / 게시하기' 시 자동으로 새 버전이 보관되며, 언제든지 원하는 과거 버전으로 되돌리거나 미리보기로 불러올 수 있습니다.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        setManualArchiveTitle(
+                          `디자인 백업 (${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })})`
+                        );
+                        setManualArchiveNote('');
+                        setIsCreatingManualArchive(true);
+                      }}
+                      className="px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shrink-0 flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>현재 설정 보관</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Add New Category Form */}
-                {isAddingCategory && (
+                {/* Relocation notice for categories per request 4 */}
+                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-md text-xs text-blue-900 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed text-[11px]">
+                    <strong>카테고리 관리 위치 안내:</strong> 디자인 모드에 있던 카테고리 관리는 <strong>[FAQ 관리 &gt; 카테고리 통합 관리]</strong> 탭으로 이동되었습니다. 질문 게시글과 카테고리를 한 화면에서 더 직관적으로 관리하실 수 있습니다.
+                  </div>
+                </div>
+
+                {/* Manual Archive Creation Form */}
+                {isCreatingManualArchive && (
                   <form
-                    onSubmit={handleAddCategorySubmit}
-                    className="p-3.5 rounded border border-blue-200 bg-blue-50/40 space-y-3 animate-fade-in"
+                    onSubmit={handleCreateManualArchive}
+                    className="p-3.5 rounded-lg border border-purple-200 bg-purple-50/40 space-y-3 animate-fade-in"
                   >
                     <div className="font-bold text-gray-900 text-xs flex items-center justify-between">
-                      <span>새 카테고리 등록</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingCategory(false)}
-                        className="text-gray-400 hover:text-gray-700 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">
-                          카테고리 ID (영문 고유 식별자)*
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={newCatId}
-                          onChange={(e) => setNewCatId(e.target.value)}
-                          placeholder="예: scholarship, job, health"
-                          className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-[#1A3B6B]"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-0.5">영문 소문자 및 숫자 조합</p>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">
-                          한국어 명칭 (필수)*
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={newCatKo}
-                          onChange={(e) => setNewCatKo(e.target.value)}
-                          placeholder="예: 장학/등록금, 취업/아르바이트"
-                          className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-[#1A3B6B]"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-0.5">포털 기본 표시 명칭</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                        대표 아이콘 선택
-                      </label>
-                      <div className="grid grid-cols-5 gap-1.5">
-                        {categoryIcons.map((ic) => (
-                          <button
-                            key={ic.id}
-                            type="button"
-                            onClick={() => setNewCatIcon(ic.id)}
-                            className={`p-1.5 rounded border flex flex-col items-center gap-1 text-[10px] transition-colors cursor-pointer ${
-                              newCatIcon === ic.id
-                                ? 'border-[#1A3B6B] bg-blue-50 text-[#1A3B6B] font-bold'
-                                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                            }`}
-                          >
-                            {ic.icon}
-                            <span className="truncate max-w-full">{ic.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingCategory(false)}
-                        className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold cursor-pointer"
-                      >
-                        취소
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-3.5 py-1 rounded bg-[#1A3B6B] text-white font-bold cursor-pointer"
-                      >
-                        추가 완료
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {/* Edit Category Inline Form */}
-                {editingCategory && (
-                  <div className="p-3.5 rounded border border-amber-300 bg-amber-50/50 space-y-3 animate-fade-in">
-                    <div className="font-bold text-gray-900 text-xs flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
-                        <span>카테고리 수정:</span>
-                        <code className="text-xs bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">
-                          {editingCategory.id}
-                        </code>
+                        <FolderArchive className="w-4 h-4 text-purple-700" />
+                        <span>현재 편집 설정 즉시 보관하기</span>
                       </span>
                       <button
                         type="button"
-                        onClick={() => setEditingCategory(null)}
+                        onClick={() => setIsCreatingManualArchive(false)}
                         className="text-gray-400 hover:text-gray-700 cursor-pointer"
                       >
                         ✕
@@ -1160,107 +1271,165 @@ export const ThemeCustomizer: React.FC = () => {
 
                     <div>
                       <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">
-                        한국어 명칭
+                        보관본 버전 명칭 *
                       </label>
                       <input
                         type="text"
-                        value={editingCategory.name.ko || ''}
-                        onChange={(e) =>
-                          setEditingCategory({
-                            ...editingCategory,
-                            name: { ...editingCategory.name, ko: e.target.value },
-                          })
-                        }
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-amber-500"
+                        required
+                        value={manualArchiveTitle}
+                        onChange={(e) => setManualArchiveTitle(e.target.value)}
+                        placeholder="예: 2026 가을학기 신학기 테마 백업"
+                        className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-purple-600"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                        대표 아이콘
+                      <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">
+                        메모 / 변경 사유 (선택)
                       </label>
-                      <div className="grid grid-cols-5 gap-1.5">
-                        {categoryIcons.map((ic) => (
-                          <button
-                            key={ic.id}
-                            type="button"
-                            onClick={() =>
-                              setEditingCategory({ ...editingCategory, icon: ic.id })
-                            }
-                            className={`p-1.5 rounded border flex flex-col items-center gap-1 text-[10px] cursor-pointer ${
-                              editingCategory.icon === ic.id
-                                ? 'border-[#1A3B6B] bg-blue-50 text-[#1A3B6B] font-bold'
-                                : 'border-gray-200 bg-white text-gray-600'
-                            }`}
-                          >
-                            {ic.icon}
-                            <span className="truncate max-w-full">{ic.label}</span>
-                          </button>
-                        ))}
-                      </div>
+                      <input
+                        type="text"
+                        value={manualArchiveNote}
+                        onChange={(e) => setManualArchiveNote(e.target.value)}
+                        placeholder="예: 신규 로고 및 그린 테마 적용 전 백업"
+                        className="w-full px-2.5 py-1.5 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-purple-600"
+                      />
                     </div>
 
                     <div className="flex justify-end gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setEditingCategory(null)}
+                        onClick={() => setIsCreatingManualArchive(false)}
                         className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-semibold cursor-pointer"
                       >
                         취소
                       </button>
                       <button
-                        type="button"
-                        onClick={() => handleUpdateCategory(editingCategory)}
-                        className="px-3.5 py-1 rounded bg-[#2E7D5B] text-white font-bold cursor-pointer"
+                        type="submit"
+                        className="px-3.5 py-1 rounded bg-purple-700 text-white font-bold cursor-pointer"
                       >
-                        수정 저장
+                        보관 완료
                       </button>
                     </div>
-                  </div>
+                  </form>
                 )}
 
-                {/* Categories List */}
-                <div className="space-y-2">
-                  {(draftConfig.categories || []).map((cat, idx) => (
-                    <div
-                      key={cat.id}
-                      className="p-3 rounded border border-gray-200 bg-gray-50 flex items-center justify-between hover:bg-white transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[#1A3B6B] flex items-center justify-center font-bold text-[10px]">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="font-bold text-gray-900 flex items-center gap-1.5">
-                            <span>{cat.name.ko}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              ({cat.id})
-                            </span>
+                {/* Archive List */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-gray-600 px-1">
+                    <span>저장된 버전 목록 (총 {archives.length}개)</span>
+                    <span className="text-[11px] text-gray-400">최대 30개까지 자동 보관</span>
+                  </div>
+
+                  {archives.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-xs">
+                      보관된 버전이 없습니다.
+                    </div>
+                  ) : (
+                    archives.map((item, idx) => {
+                      const isInitial = item.id === 'initial-system-default';
+                      const isLiveMatch = JSON.stringify(item.configSnapshot) === JSON.stringify(config);
+
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-3.5 rounded-lg border transition-all ${
+                            isLiveMatch
+                              ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-300'
+                              : 'border-gray-200 bg-white hover:border-gray-300 shadow-2xs'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="font-bold text-gray-900 text-xs">{item.title}</span>
+                                {isLiveMatch && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                    현재 포털 적용 중
+                                  </span>
+                                )}
+                                {isInitial && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-gray-100 text-gray-600">
+                                    초기 기본본
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] text-gray-500 flex items-center gap-2 flex-wrap font-mono">
+                                <span>{new Date(item.timestamp).toLocaleString('ko-KR')}</span>
+                                {item.author && <span>• 작성: {item.author}</span>}
+                              </div>
+
+                              {item.note && (
+                                <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
+                                  {item.note}
+                                </p>
+                              )}
+
+                              {/* Snapshot Color preview tags */}
+                              <div className="flex items-center gap-1.5 mt-2">
+                                <span className="text-[10px] text-gray-400">테마 컬러:</span>
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full border border-black/10 inline-block"
+                                  style={{ backgroundColor: item.configSnapshot.mainColor }}
+                                  title={`메인: ${item.configSnapshot.mainColor}`}
+                                />
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full border border-black/10 inline-block"
+                                  style={{ backgroundColor: item.configSnapshot.accentColor }}
+                                  title={`포인트: ${item.configSnapshot.accentColor}`}
+                                />
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full border border-black/10 inline-block"
+                                  style={{ backgroundColor: item.configSnapshot.warnColor }}
+                                  title={`주의: ${item.configSnapshot.warnColor}`}
+                                />
+                                <span className="text-[10px] text-gray-400 ml-1">
+                                  로고: {item.configSnapshot.logoType || 'none'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Version Actions */}
+                            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  restoreArchive(item.id, true);
+                                  setArchiveActionToast(`'${item.title}' 버전이 미리보기에 임시 불러와졌습니다.`);
+                                  setTimeout(() => setArchiveActionToast(null), 3000);
+                                }}
+                                className="px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors cursor-pointer"
+                                title="학생 화면에는 영향 없이 우측 미리보기로만 불러옵니다"
+                              >
+                                미리보기 불러오기
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setRestoreConfirmTarget(item)}
+                                className="px-2.5 py-1 rounded text-[11px] font-bold bg-[#1A3B6B] hover:bg-[#122a4d] text-white transition-colors cursor-pointer"
+                                title="학생 포털에 즉시 복원 적용합니다"
+                              >
+                                실시간 복원
+                              </button>
+
+                              {!isInitial && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteArchiveTarget(item)}
+                                  className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                                  title="보관본 삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            setEditingCategory(cat);
-                            setIsAddingCategory(false);
-                          }}
-                          className="p-1 rounded text-gray-500 hover:text-blue-700 hover:bg-blue-50 cursor-pointer"
-                          title="수정"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                          title="삭제"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })
+                  )}
                 </div>
               </div>
             )}
@@ -2004,24 +2173,131 @@ export const ThemeCustomizer: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Live Interactive Split Preview (7 cols) */}
+        {/* Right: Live Interactive Split Preview (7 cols) - 요청 8: 실시간 미리보기 기능 보완 및 개선 */}
         <div className="lg:col-span-7 bg-white rounded-md border border-[#E2E5E8] shadow-xs overflow-hidden sticky top-20">
-          <div className="bg-gray-50 px-4 py-2.5 border-b border-[#E2E5E8] flex items-center justify-between text-xs">
+          {/* Preview Controller Top Bar */}
+          <div className="bg-gray-50 px-3.5 py-2.5 border-b border-[#E2E5E8] flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-400"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
-              <span className="font-semibold text-gray-700 ml-2">실시간 라이브 미리보기 (Live Preview)</span>
+              <span className="font-bold text-gray-800 ml-1">실시간 라이브 미리보기</span>
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                임시 반영 중
+              </span>
             </div>
-            <span className="text-[11px] text-gray-400 font-mono">
-              반영 대기 중 (Draft Preview)
-            </span>
+
+            {/* Device Switcher & Fullscreen Preview Button */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center bg-gray-200/80 p-0.5 rounded border border-gray-300">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('desktop')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                    previewDevice === 'desktop'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="데스크톱 PC 화면 (100%)"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">PC</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('tablet')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                    previewDevice === 'tablet'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="태블릿 화면 (768px)"
+                >
+                  <Tablet className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">태블릿</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDevice('mobile')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                    previewDevice === 'mobile'
+                      ? 'bg-white text-gray-900 shadow-2xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="모바일 화면 (375px)"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">모바일</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsFullScreenPreview(true)}
+                className="p-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 cursor-pointer"
+                title="전체화면으로 학생 포털 미리보기"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Interactive Preview Canvas */}
-          <div className="p-4 bg-gray-100 max-h-[calc(100vh-250px)] overflow-y-auto">
+          {/* Section Filter Toolbar inside Preview */}
+          <div className="bg-white px-3 py-1.5 border-b border-gray-200 flex items-center justify-between gap-2 overflow-x-auto text-[11px]">
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-gray-400 font-semibold mr-1">미리보기 영역:</span>
+              {[
+                { id: 'all', label: '전체 화면' },
+                { id: 'hero', label: '메인 배너' },
+                { id: 'faq', label: '자주 묻는 질문' },
+                { id: 'docs', label: '서식 다운로드' },
+                { id: 'schedule', label: '일정표' },
+              ].map((sec) => (
+                <button
+                  key={sec.id}
+                  type="button"
+                  onClick={() => setPreviewSection(sec.id as any)}
+                  className={`px-2 py-0.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
+                    previewSection === sec.id
+                      ? 'bg-[#1A3B6B] text-white font-bold'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  {sec.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Language preview toggle */}
+            <div className="flex items-center gap-1 shrink-0 ml-auto">
+              <span className="text-gray-400 font-semibold">언어:</span>
+              {(['ko', 'en', 'vi', 'zh', 'mn'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setPreviewLang(l)}
+                  className={`px-1.5 py-0.5 rounded font-mono font-bold uppercase transition-colors cursor-pointer ${
+                    previewLang === l
+                      ? 'bg-[#2E7D5B] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive Preview Canvas Container with Responsive Width Wrapper */}
+          <div className="p-4 bg-gray-100/90 max-h-[calc(100vh-270px)] overflow-y-auto flex justify-center">
             <div
-              className="bg-white border shadow-xs overflow-hidden transition-all"
+              className={`bg-white border shadow-xs overflow-hidden transition-all duration-200 w-full ${
+                previewDevice === 'mobile'
+                  ? 'max-w-[375px]'
+                  : previewDevice === 'tablet'
+                  ? 'max-w-[680px]'
+                  : 'max-w-full'
+              }`}
               style={{
                 borderRadius: `${draftConfig.borderRadius}px`,
                 borderColor: '#E2E5E8',
@@ -2041,123 +2317,259 @@ export const ThemeCustomizer: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex gap-1 text-[10px]">
-                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold">
-                    KO
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">
-                    EN
+                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-800 font-bold uppercase">
+                    {previewLang}
                   </span>
                 </div>
               </div>
 
               {/* Preview Hero Banner */}
-              <div
-                className="p-6 text-center text-white"
-                style={{
-                  backgroundColor: draftConfig.bgType === 'campus' ? undefined : draftConfig.mainColor,
-                  backgroundImage: draftConfig.bgType === 'campus'
-                    ? 'linear-gradient(rgba(18, 40, 75, 0.88), rgba(26, 59, 107, 0.94)), url("https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80")'
-                    : undefined,
-                  backgroundSize: 'cover',
-                }}
-              >
-                <h3 className="text-base font-extrabold mb-3">
-                  {draftConfig.heroTitle}
-                </h3>
-
-                {/* Preview Search bar with custom button design */}
+              {(previewSection === 'all' || previewSection === 'hero') && (
                 <div
-                  className="bg-white p-1 flex items-center shadow-md text-xs text-gray-400 max-w-md mx-auto transition-all"
-                  style={{ borderRadius: `${draftConfig.searchBarRadius ?? draftConfig.borderRadius ?? 8}px` }}
+                  className="p-6 text-center text-white transition-all"
+                  style={{
+                    backgroundColor: draftConfig.bgType === 'campus' ? undefined : draftConfig.mainColor,
+                    backgroundImage:
+                      draftConfig.bgType === 'campus'
+                        ? 'linear-gradient(rgba(18, 40, 75, 0.88), rgba(26, 59, 107, 0.94)), url("https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80")'
+                        : undefined,
+                    backgroundSize: 'cover',
+                  }}
                 >
-                  <span className="px-2">🔍</span>
-                  <span className="text-gray-500 text-[11px] truncate flex-1 text-left">
-                    {draftConfig.searchPlaceholder}
-                  </span>
-                  <span
-                    className="font-bold text-white flex items-center justify-center gap-1 transition-all"
-                    style={{
-                      backgroundColor: draftConfig.searchButtonColor || draftConfig.accentColor || draftConfig.mainColor,
-                      borderRadius: draftConfig.searchButtonShape === 'square'
-                        ? '0px'
-                        : draftConfig.searchButtonShape === 'pill'
-                        ? '9999px'
-                        : `${draftConfig.searchButtonRadius ?? 6}px`,
-                      padding: draftConfig.searchButtonSize === 'sm'
-                        ? '3px 8px'
-                        : draftConfig.searchButtonSize === 'lg'
-                        ? '8px 16px'
-                        : '5px 12px',
-                      fontSize: draftConfig.searchButtonSize === 'sm' ? '10px' : draftConfig.searchButtonSize === 'lg' ? '12px' : '11px',
-                    }}
-                  >
-                    {draftConfig.searchButtonShowIcon !== false && (
-                      draftConfig.searchButtonIconType === 'arrow' ? '➔' : draftConfig.searchButtonIconType === 'sparkles' ? '✨' : '🔍'
-                    )}
-                    <span>{draftConfig.searchButtonText || '검색'}</span>
-                  </span>
-                </div>
+                  <h3 className="text-base font-extrabold mb-3">
+                    {draftConfig.heroTitle}
+                  </h3>
 
-                {/* Preview Categories Quick Chips */}
-                <div className="flex flex-wrap items-center justify-center gap-1 mt-3">
-                  {(draftConfig.categories || []).map((cat) => (
-                    <span
-                      key={cat.id}
-                      className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-white/15 text-white/90 border border-white/20"
+                  {/* Interactive Search Bar in Preview */}
+                  <div
+                    className="bg-white p-1 flex items-center shadow-md text-xs text-gray-700 max-w-md mx-auto transition-all"
+                    style={{ borderRadius: `${draftConfig.searchBarRadius ?? draftConfig.borderRadius ?? 8}px` }}
+                  >
+                    <span className="px-2 text-gray-400">🔍</span>
+                    <input
+                      type="text"
+                      value={previewSearchText}
+                      onChange={(e) => setPreviewSearchText(e.target.value)}
+                      placeholder={draftConfig.searchPlaceholder || '무엇이든 검색해 보세요...'}
+                      className="text-gray-800 text-[11px] truncate flex-1 outline-none bg-transparent"
+                    />
+                    <button
+                      type="button"
+                      className="font-bold text-white flex items-center justify-center gap-1 transition-all"
+                      style={{
+                        backgroundColor:
+                          draftConfig.searchButtonColor || draftConfig.accentColor || draftConfig.mainColor,
+                        borderRadius:
+                          draftConfig.searchButtonShape === 'square'
+                            ? '0px'
+                            : draftConfig.searchButtonShape === 'pill'
+                            ? '9999px'
+                            : `${draftConfig.searchButtonRadius ?? 6}px`,
+                        padding:
+                          draftConfig.searchButtonSize === 'sm'
+                            ? '3px 8px'
+                            : draftConfig.searchButtonSize === 'lg'
+                            ? '8px 16px'
+                            : '5px 12px',
+                        fontSize:
+                          draftConfig.searchButtonSize === 'sm'
+                            ? '10px'
+                            : draftConfig.searchButtonSize === 'lg'
+                            ? '12px'
+                            : '11px',
+                      }}
                     >
-                      {cat.name.ko}
-                    </span>
-                  ))}
-                </div>
-              </div>
+                      {draftConfig.searchButtonShowIcon !== false && (
+                        <span>
+                          {draftConfig.searchButtonIconType === 'arrow'
+                            ? '➔'
+                            : draftConfig.searchButtonIconType === 'sparkles'
+                            ? '✨'
+                            : '🔍'}
+                        </span>
+                      )}
+                      <span>{draftConfig.searchButtonText || '검색'}</span>
+                    </button>
+                  </div>
 
-              {/* Preview Content Snippet */}
-              <div className="p-4 space-y-3 bg-[#fafbfc]">
-                <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1 border-b border-gray-200">
-                  <span>자주 묻는 질문 (FAQ) 미리보기</span>
-                  <span
-                    className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-white"
-                    style={{ backgroundColor: draftConfig.warnColor }}
+                  {/* Interactive Category Chips */}
+                  <div className="flex flex-wrap items-center justify-center gap-1 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSelectedCategory('all')}
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors cursor-pointer border ${
+                        previewSelectedCategory === 'all'
+                          ? 'bg-white text-gray-900 border-white font-bold'
+                          : 'bg-white/15 text-white/90 border-white/20 hover:bg-white/25'
+                      }`}
+                    >
+                      전체
+                    </button>
+                    {(draftConfig.categories || []).map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setPreviewSelectedCategory(cat.id)}
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors cursor-pointer border ${
+                          previewSelectedCategory === cat.id
+                            ? 'bg-white text-gray-900 border-white font-bold'
+                            : 'bg-white/15 text-white/90 border-white/20 hover:bg-white/25'
+                        }`}
+                      >
+                        {cat.name.ko}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview FAQ Section */}
+              {(previewSection === 'all' || previewSection === 'faq') && (
+                <div className="p-4 space-y-3 bg-[#fafbfc]">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1 border-b border-gray-200">
+                    <span className="flex items-center gap-1.5">
+                      <HelpCircle className="w-3.5 h-3.5 text-[#1A3B6B]" />
+                      <span>자주 묻는 질문 (FAQ) 실시간 반응</span>
+                    </span>
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-white"
+                      style={{ backgroundColor: draftConfig.warnColor }}
+                    >
+                      중요 공지
+                    </span>
+                  </div>
+
+                  {/* Interactive FAQ Card 1 */}
+                  <div
+                    className="p-3 bg-white border border-[#E2E5E8] shadow-2xs text-xs transition-all cursor-pointer"
+                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
+                    onClick={() =>
+                      setPreviewFaqExpanded((prev) => (prev === 'faq-preview-1' ? null : 'faq-preview-1'))
+                    }
                   >
-                    중요 안내
-                  </span>
-                </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: draftConfig.accentColor }}
+                        ></span>
+                        <span className="font-bold text-gray-800">
+                          비자(D-4) 연장 신청은 언제부터 가능한가요?
+                        </span>
+                      </div>
+                      <span className="text-gray-400 text-xs">
+                        {previewFaqExpanded === 'faq-preview-1' ? '▲' : '▼'}
+                      </span>
+                    </div>
 
-                <div
-                  className="p-3 bg-white border border-[#E2E5E8] shadow-xs text-xs flex items-center justify-between"
-                  style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                >
-                  <div className="flex items-center gap-2">
+                    {previewFaqExpanded === 'faq-preview-1' && (
+                      <div className="mt-2.5 pt-2 border-t border-gray-100 text-[11px] text-gray-600 leading-relaxed animate-fade-in">
+                        체류기간 만료일 4개월 전부터 관할 출입국관리사무소(대구출입국) 방문 또는 하이코리아 웹사이트를 통해 온라인 신청이 가능합니다. (출석률 80% 이상 필수)
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interactive FAQ Card 2 */}
+                  <div
+                    className="p-3 bg-white border border-[#E2E5E8] shadow-2xs text-xs transition-all cursor-pointer"
+                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
+                    onClick={() =>
+                      setPreviewFaqExpanded((prev) => (prev === 'faq-preview-2' ? null : 'faq-preview-2'))
+                    }
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: draftConfig.accentColor }}
+                        ></span>
+                        <span className="font-bold text-gray-800">
+                          기숙사(명교생활관) 외박 신청 방법 및 기준
+                        </span>
+                      </div>
+                      <span className="text-gray-400 text-xs">
+                        {previewFaqExpanded === 'faq-preview-2' ? '▲' : '▼'}
+                      </span>
+                    </div>
+
+                    {previewFaqExpanded === 'faq-preview-2' && (
+                      <div className="mt-2.5 pt-2 border-t border-gray-100 text-[11px] text-gray-600 leading-relaxed animate-fade-in">
+                        외박 신청은 당일 오후 9시까지 명교생활관 모바일 포털 시스템에서 가능하며, 한 학기 최대 15일까지 허용됩니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Document Downloads Section */}
+              {(previewSection === 'all' || previewSection === 'docs') && (
+                <div className="p-4 space-y-2 bg-white border-t border-gray-200">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1">
+                    <span className="flex items-center gap-1.5">
+                      <FileBadge className="w-3.5 h-3.5 text-blue-600" />
+                      <span>서식 자료실 미리보기</span>
+                    </span>
+                    <span className="text-[10px] text-gray-400">PDF / HWP / DOCX</span>
+                  </div>
+
+                  <div
+                    className="p-2.5 border border-gray-200 bg-gray-50 flex items-center justify-between text-xs"
+                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
+                  >
+                    <div>
+                      <div className="font-bold text-gray-900">체류기간 연장허가 신청서 (통합신청서)</div>
+                      <div className="text-[10px] text-gray-500 font-mono">immigration_form.pdf (180 KB)</div>
+                    </div>
                     <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: draftConfig.accentColor }}
-                    ></span>
-                    <span className="font-semibold text-gray-800">
-                      비자(D-4) 연장 신청은 언제부터 가능한가요?
+                      className="px-2 py-1 rounded text-[10px] font-bold text-white shadow-2xs"
+                      style={{ backgroundColor: draftConfig.mainColor }}
+                    >
+                      다운로드
                     </span>
                   </div>
-                  <span className="text-gray-400 text-[11px]">▼</span>
                 </div>
+              )}
 
-                <div
-                  className="p-3 bg-white border border-[#E2E5E8] shadow-xs text-xs flex items-center justify-between"
-                  style={{ borderRadius: `${draftConfig.borderRadius}px` }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: draftConfig.accentColor }}
-                    ></span>
-                    <span className="font-semibold text-gray-800">
-                      기숙사(명교생활관) 외박 신청 방법
+              {/* Preview Schedule Section */}
+              {(previewSection === 'all' || previewSection === 'schedule') && (
+                <div className="p-4 space-y-2 bg-[#f8fafc] border-t border-gray-200">
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-700 pb-1">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>일정표 미리보기</span>
                     </span>
+                    <span className="text-[10px] text-gray-500 font-semibold">2026학년도</span>
                   </div>
-                  <span className="text-gray-400 text-[11px]">▼</span>
+
+                  <div
+                    className="p-3 bg-white border border-gray-200 text-xs space-y-2"
+                    style={{ borderRadius: `${draftConfig.borderRadius}px` }}
+                  >
+                    <div className="flex items-center gap-1 border-b border-gray-100 pb-1 text-[11px] font-semibold text-gray-600">
+                      <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-900 font-bold">봄학기</span>
+                      <span className="px-2 py-0.5 rounded text-gray-500">여름학기</span>
+                      <span className="px-2 py-0.5 rounded text-gray-500">가을학기</span>
+                      <span className="px-2 py-0.5 rounded text-gray-500">겨울학기</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div>
+                        <span className="font-bold text-gray-900 block">한국어학당 정규과정 개강일</span>
+                        <span className="text-[10px] text-gray-400 font-mono">2026-03-02</span>
+                      </div>
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                        style={{ backgroundColor: draftConfig.accentColor }}
+                      >
+                        주요 학사
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Preview Footer */}
-              <div className="p-3 bg-[#243447] text-white text-[10px] space-y-1.5">
+              <div className="p-4 bg-[#243447] text-white text-[10px] space-y-2 border-t border-gray-700">
                 <div className="flex justify-between items-center text-gray-300">
                   <span>{draftConfig.phone}</span>
                   <span>{draftConfig.email}</span>
@@ -2166,7 +2578,7 @@ export const ThemeCustomizer: React.FC = () => {
                   {draftConfig.location}
                 </div>
                 {draftConfig.showRelatedSites !== false && (
-                  <div className="pt-1 border-t border-gray-700/60 text-[9px] text-gray-400 flex items-center gap-1.5 flex-wrap">
+                  <div className="pt-1.5 border-t border-gray-700/60 text-[9px] text-gray-400 flex items-center gap-1.5 flex-wrap">
                     <span className="text-gray-300 font-semibold">관련 사이트:</span>
                     <span className="text-blue-300">하이코리아</span>
                     <span>•</span>
@@ -2185,6 +2597,254 @@ export const ThemeCustomizer: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ===================== MODAL 1: PUBLISH & APPLY CONFIRMATION (요청 6) ===================== */}
+      {showPublishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border border-blue-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <div className="flex items-center gap-2 text-gray-900 font-bold text-base">
+                <CheckCircle2 className="w-5 h-5 text-[#1A3B6B]" />
+                <span>학생 포털에 게시 및 적용하기</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPublishModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handlePublishSubmit} className="space-y-4 text-xs">
+              <div className="p-3 bg-blue-50/80 rounded border border-blue-200 text-blue-900 leading-relaxed">
+                지금 적용하시면 현재 디자인 모드에서 수정한 색상, 로고, 메인 배너 및 검색 설정이 <strong>실제 유학생 포털 화면에 즉시 반영</strong>됩니다.
+                <br />
+                <span className="text-[11px] text-blue-700 mt-1 block">
+                  ※ 안전한 관리를 위해 게시 시점에 자동으로 <strong>버전 보관함</strong>에 현재 설정이 영구 보관됩니다.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  게시 버전 명칭 (이력 식별용)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={publishVersionTitle}
+                  onChange={(e) => setPublishVersionTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded border border-gray-300 text-xs bg-white focus:ring-1 focus:ring-[#1A3B6B]"
+                  placeholder="예: 2026학년도 1학기 네이비 테마 및 공식 로고 적용"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPublishModal(false)}
+                  className="px-4 py-2 rounded text-gray-700 bg-gray-100 hover:bg-gray-200 font-semibold cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2 rounded bg-[#1A3B6B] hover:bg-[#122a4d] text-white font-bold flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{isSaving ? '게시 중...' : '지금 즉시 게시 및 보관'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL 2: RESTORE VERSION CONFIRMATION ===================== */}
+      {restoreConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-5 border border-purple-200 text-xs">
+            <div className="flex items-center gap-2 text-purple-900 font-bold text-sm mb-3">
+              <Archive className="w-5 h-5 text-purple-700" />
+              <span>과거 보관 버전 실시간 복원</span>
+            </div>
+
+            <p className="text-gray-700 leading-relaxed mb-4">
+              정말 <strong className="text-gray-900 font-bold">'{restoreConfirmTarget.title}'</strong> 버전으로 학생 포털의 모든 디자인을 되돌리시겠습니까?
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRestoreConfirmTarget(null)}
+                className="px-3.5 py-1.5 rounded text-gray-700 bg-gray-100 hover:bg-gray-200 font-semibold cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreArchiveConfirmed}
+                className="px-4 py-1.5 rounded bg-purple-700 hover:bg-purple-800 text-white font-bold shadow-xs cursor-pointer"
+              >
+                복원 실행
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL 3: DELETE ARCHIVE CONFIRMATION ===================== */}
+      {deleteArchiveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-5 border border-red-200 text-xs">
+            <div className="flex items-center gap-2 text-red-600 font-bold text-sm mb-3">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <span>보관 버전 삭제</span>
+            </div>
+
+            <p className="text-gray-700 leading-relaxed mb-4">
+              보관된 <strong className="text-gray-900 font-bold">'{deleteArchiveTarget.title}'</strong> 버전 기록을 삭제하시겠습니까? 삭제된 보관본은 복구할 수 없습니다.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setDeleteArchiveTarget(null)}
+                className="px-3.5 py-1.5 rounded text-gray-700 bg-gray-100 hover:bg-gray-200 font-semibold cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteArchiveConfirmed}
+                className="px-4 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold shadow-xs cursor-pointer"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL 4: FULLSCREEN INTERACTIVE PREVIEW (요청 8) ===================== */}
+      {isFullScreenPreview && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col p-2 sm:p-6 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg shadow-2xl flex flex-col h-full overflow-hidden border border-gray-300">
+            {/* Modal Header */}
+            <div className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                <span className="font-bold text-sm">학생 포털 전체화면 실시간 미리보기 (Live Simulator)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenPublishModal}
+                  className="px-3 py-1 rounded bg-[#2E7D5B] hover:bg-[#236348] text-white font-bold transition-colors cursor-pointer"
+                >
+                  이 설정으로 즉시 게시
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsFullScreenPreview(false)}
+                  className="p-1 rounded text-gray-400 hover:text-white cursor-pointer"
+                  title="닫기"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body iframe-like container */}
+            <div className="flex-1 overflow-y-auto bg-gray-50">
+              {/* Header */}
+              <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+                <div className="flex items-center gap-3">
+                  {draftConfig.logoType && draftConfig.logoType !== 'none' && (
+                    <KmuLogo config={draftConfig} />
+                  )}
+                  <span className="font-bold text-sm sm:text-base text-gray-900">
+                    {draftConfig.heroTitle}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-bold text-xs">
+                    KO 한국어
+                  </span>
+                </div>
+              </header>
+
+              {/* Hero Banner */}
+              <div
+                className="py-12 px-6 text-center text-white"
+                style={{
+                  backgroundColor: draftConfig.bgType === 'campus' ? undefined : draftConfig.mainColor,
+                  backgroundImage:
+                    draftConfig.bgType === 'campus'
+                      ? 'linear-gradient(rgba(18, 40, 75, 0.88), rgba(26, 59, 107, 0.94)), url("https://images.unsplash.com/photo-1541339907198-e08756dedf3f?auto=format&fit=crop&w=1600&q=80")'
+                      : undefined,
+                  backgroundSize: 'cover',
+                }}
+              >
+                <h1 className="text-xl sm:text-2xl font-extrabold mb-4">
+                  {draftConfig.heroTitle}
+                </h1>
+                <p className="text-xs sm:text-sm text-blue-100 max-w-xl mx-auto mb-6">
+                  {draftConfig.heroSubtitle}
+                </p>
+
+                {/* Search Bar */}
+                <div
+                  className="bg-white p-1.5 flex items-center shadow-lg text-xs text-gray-800 max-w-lg mx-auto"
+                  style={{ borderRadius: `${draftConfig.searchBarRadius ?? draftConfig.borderRadius ?? 8}px` }}
+                >
+                  <span className="px-3 text-gray-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    placeholder={draftConfig.searchPlaceholder}
+                    className="flex-1 outline-none text-xs text-gray-800 bg-transparent"
+                  />
+                  <button
+                    type="button"
+                    className="font-bold text-white px-4 py-2 text-xs flex items-center gap-1 shadow-xs"
+                    style={{
+                      backgroundColor:
+                        draftConfig.searchButtonColor || draftConfig.accentColor || draftConfig.mainColor,
+                      borderRadius: `${draftConfig.searchButtonRadius ?? 6}px`,
+                    }}
+                  >
+                    <span>{draftConfig.searchButtonText || '검색'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sample Content */}
+              <div className="max-w-4xl mx-auto p-6 space-y-6">
+                <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-xs">
+                  <h3 className="font-bold text-gray-900 text-sm mb-3">자주 묻는 질문 (FAQ)</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between font-semibold text-gray-800">
+                      <span>D-4 비자 연장 및 등록금 납부 증명서 발급 안내</span>
+                      <span>▼</span>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded border border-gray-200 flex justify-between font-semibold text-gray-800">
+                      <span>외국인 유학생 건강보험 의무가입 및 진료비 지원</span>
+                      <span>▼</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <footer className="bg-[#243447] text-white p-6 text-xs text-center space-y-1">
+                <div>계명대학교 한국어학당 국제처 유학생지원팀</div>
+                <div className="text-gray-400 text-[11px]">{draftConfig.location} | TEL: {draftConfig.phone}</div>
+              </footer>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
