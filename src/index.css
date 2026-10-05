@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--app-font-family);
+}
+
 :root {
   --primary-color: #1A3B6B;
   --primary-hover: #122a4d;
@@ -12,14 +16,39 @@
   --bg-page: #F7F8F9;
   --border-radius: 6px;
   --font-scale: 1rem;
+  --app-font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --heading-weight: 700;
+  --line-height-scale: 1.6;
+}
+
+html,
+body,
+#root,
+button,
+input,
+select,
+textarea,
+optgroup,
+option,
+table,
+th,
+td,
+[contenteditable] {
+  font-family: var(--app-font-family) !important;
 }
 
 body {
-  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-scale);
+  line-height: var(--line-height-scale);
   background-color: var(--bg-page);
   color: #1e293b;
   margin: 0;
   padding: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  font-size: inherit;
 }
 
 /* Dynamic theme helper classes */

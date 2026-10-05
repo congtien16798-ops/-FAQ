@@ -301,17 +301,8 @@ function MainApp() {
 
       {/* Content Router */}
       <main className="flex-1">
-        {/* DESIGN MODE: Split View Customizer */}
-        {isDesignMode ? (
-          <ThemeCustomizer
-            faqs={faqs}
-            documents={documents}
-            schedules={schedules}
-            currentLang={currentLang}
-            onExit={() => setIsDesignMode(false)}
-          />
-        ) : activeTab === 'admin' ? (
-          /* ADMIN DASHBOARD */
+        {/* ADMIN DASHBOARD: Shows all 7 management tabs (Design, FAQ, Docs, Inquiries, Schedules, Chatbot, Accounts) */}
+        {activeTab === 'admin' ? (
           <AdminDashboard
             faqs={faqs}
             setFaqs={setFaqs}
@@ -323,26 +314,39 @@ function MainApp() {
             setSchedules={setSchedules}
             onExitAdmin={() => setActiveTab('faq')}
           />
+        ) : isDesignMode ? (
+          /* DESIGN MODE: Standalone Fullscreen Customizer if opened directly from portal */
+          <ThemeCustomizer
+            faqs={faqs}
+            documents={documents}
+            schedules={schedules}
+            currentLang={currentLang}
+            onExit={() => setIsDesignMode(false)}
+          />
         ) : (
           /* STUDENT PORTAL VIEWS */
           <>
             {/* Hero Section with Comprehensive Search Bar */}
-            <HeroSection
-              currentLang={currentLang}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedCategory={selectedCategory}
-              setSelectedCategory={setSelectedCategory}
-            />
+            {config.showHeroBanner !== false && (
+              <HeroSection
+                currentLang={currentLang}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+              />
+            )}
 
             {/* If user searched in the large search bar: Show Comprehensive Unified Search Results */}
             {searchQuery.trim() !== '' ? (
               <IntegratedSearchResults
                 faqs={faqs}
                 documents={documents}
+                schedules={schedules}
                 searchQuery={searchQuery}
                 onClearSearch={() => setSearchQuery('')}
                 currentLang={currentLang}
+                onSelectLanguage={(lang) => setCurrentLang(lang)}
                 onNavigateTab={(tab) => {
                   setSearchQuery('');
                   setActiveTab(tab);
@@ -371,21 +375,21 @@ function MainApp() {
                   />
                 )}
 
-                {/* TAB: 1:1 Fast Inquiry Registration */}
-                {activeTab === 'inquiry' && (
-                  <InquirySection
-                    currentLang={currentLang}
-                    onSuccessSubmitted={() => {}}
-                    onNavigateSchedule={() => setActiveTab('schedule')}
-                  />
-                )}
-
-                {/* TAB: Academic Schedule */}
+                {/* TAB: Academic Schedule (한국어학당 일정) */}
                 {activeTab === 'schedule' && (
                   <ScheduleSection
                     schedules={schedules}
                     currentLang={currentLang}
                     onNavigateInquiry={() => setActiveTab('inquiry')}
+                  />
+                )}
+
+                {/* TAB: 1:1 Fast Inquiry Registration (1:1 빠른 문의) */}
+                {activeTab === 'inquiry' && (
+                  <InquirySection
+                    currentLang={currentLang}
+                    onSuccessSubmitted={() => {}}
+                    onNavigateSchedule={() => setActiveTab('schedule')}
                   />
                 )}
               </>
@@ -406,11 +410,13 @@ function MainApp() {
         />
       )}
 
-      {/* 24/7 AI Guide Chatbot */}
+      {/* 24/7 Knowledge Guide Chatbot */}
       {!isDesignMode && activeTab !== 'admin' && (
         <ChatbotWidget
           currentLang={currentLang}
           faqs={faqs}
+          documents={documents}
+          schedules={schedules}
           onNavigateTab={(tab) => setActiveTab(tab as any)}
         />
       )}

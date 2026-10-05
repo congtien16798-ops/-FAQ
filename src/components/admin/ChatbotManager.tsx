@@ -50,7 +50,7 @@ export const ChatbotManager: React.FC = () => {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Auto-Translation Preview State
-  const [previewLang, setPreviewLang] = useState<Language>('en');
+  const [previewLang, setPreviewLang] = useState<Language>('ko');
   const [isTranslatingPreview, setIsTranslatingPreview] = useState(false);
   const [translatedData, setTranslatedData] = useState<{
     name: string;
@@ -77,14 +77,7 @@ export const ChatbotManager: React.FC = () => {
   const handleLoadTranslationPreview = async (lang: Language) => {
     setPreviewLang(lang);
     if (lang === 'ko') {
-      setTranslatedData({
-        name: botName,
-        subtitle: botSubtitle,
-        badge: badgeText,
-        welcome: welcomeMsg,
-        placeholder,
-        suggestions,
-      });
+      setTranslatedData(null);
       return;
     }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Shield, Sparkles, ChevronDown, Check, HelpCircle, Calendar } from 'lucide-react';
 import { KmuLogo } from './KmuLogo';
-import { Language } from '../types';
+import { Language, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +12,7 @@ interface NavbarProps {
   onLanguageChange: (lang: Language) => void;
   activeTab: 'faq' | 'downloads' | 'inquiry' | 'schedule' | 'admin';
   setActiveTab: (tab: 'faq' | 'downloads' | 'inquiry' | 'schedule' | 'admin') => void;
+  config?: SiteConfig;
 }
 
 const languages: { code: Language; label: string; native: string; flag: string }[] = [
@@ -27,10 +28,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLanguageChange,
   activeTab,
   setActiveTab,
+  config: propConfig,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { isAdmin, user } = useAuth();
-  const { config, isDesignMode, setIsDesignMode } = useTheme();
+  const { config: contextConfig } = useTheme();
+  const config = propConfig || contextConfig;
 
   const [showTooltip, setShowTooltip] = useState(false);
   const [showGoogleDropdown, setShowGoogleDropdown] = useState(false);
@@ -155,18 +158,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isAdmin ? (
                 <div className="flex items-center gap-1.5 pl-1.5 sm:pl-2 border-l border-gray-300 shrink-0">
                   <button
-                    onClick={() => setIsDesignMode(!isDesignMode)}
-                    className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] sm:text-xs font-medium border min-h-[28px] sm:min-h-0 ${
-                      isDesignMode
-                        ? 'bg-[#D97736] text-white border-[#D97736]'
-                        : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                    }`}
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span className="hidden sm:inline">{isDesignMode ? '디자인모드 종료' : '디자인 모드'}</span>
-                    <span className="sm:hidden">디자인</span>
-                  </button>
-                  <button
                     onClick={() => setActiveTab('admin')}
                     className="flex items-center gap-1 text-[#1A3B6B] font-semibold hover:underline text-[11px] sm:text-xs py-1"
                   >
@@ -200,9 +191,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               <KmuLogo config={config} />
             </div>
           )}
-          <span className="block text-sm sm:text-base font-bold text-[#1A3B6B] tracking-tight group-hover:text-blue-900 transition-colors truncate">
-            {transPortalName || (currentLang === 'ko' ? config.heroTitle || t.portalName : t.portalName)}
-          </span>
+          {config.showLogoTitle !== false && (
+            <span
+              className="block text-sm sm:text-base font-bold tracking-tight group-hover:opacity-85 transition-colors truncate"
+              style={{ color: config.mainColor || '#1A3B6B' }}
+            >
+              {transPortalName || (currentLang === 'ko' ? config.heroTitle || t.portalName : t.portalName)}
+            </span>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -211,9 +207,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setActiveTab('faq')}
             className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded transition-colors whitespace-nowrap shrink-0 min-h-[38px] sm:min-h-[36px] flex items-center justify-center cursor-pointer ${
               activeTab === 'faq'
-                ? 'bg-[#1A3B6B] text-white shadow-xs'
+                ? 'text-white shadow-xs'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
+            style={{ backgroundColor: activeTab === 'faq' ? (config.mainColor || '#1A3B6B') : undefined }}
           >
             {t.navFaq}
           </button>
@@ -222,9 +219,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setActiveTab('downloads')}
             className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded transition-colors whitespace-nowrap shrink-0 min-h-[38px] sm:min-h-[36px] flex items-center justify-center cursor-pointer ${
               activeTab === 'downloads'
-                ? 'bg-[#1A3B6B] text-white shadow-xs'
+                ? 'text-white shadow-xs'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
+            style={{ backgroundColor: activeTab === 'downloads' ? (config.mainColor || '#1A3B6B') : undefined }}
           >
             {t.navDownloads}
           </button>
@@ -233,9 +231,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setActiveTab('inquiry')}
             className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded transition-colors whitespace-nowrap shrink-0 min-h-[38px] sm:min-h-[36px] flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'inquiry'
-                ? 'bg-[#2E7D5B] text-white shadow-xs'
-                : 'text-[#2E7D5B] bg-[#2E7D5B]/10 hover:bg-[#2E7D5B]/20 font-semibold'
+                ? 'text-white shadow-xs'
+                : 'hover:opacity-80 font-semibold'
             }`}
+            style={{
+              backgroundColor: activeTab === 'inquiry' ? (config.accentColor || '#2E7D5B') : undefined,
+              color: activeTab === 'inquiry' ? '#ffffff' : (config.accentColor || '#2E7D5B'),
+            }}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
             {t.navInquiry}
@@ -245,12 +247,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setActiveTab('schedule')}
             className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 text-xs sm:text-sm font-semibold rounded transition-colors whitespace-nowrap shrink-0 min-h-[38px] sm:min-h-[36px] flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'schedule'
-                ? 'bg-[#1A3B6B] text-white shadow-xs'
-                : 'text-[#1A3B6B] bg-[#1A3B6B]/10 hover:bg-[#1A3B6B]/20 font-semibold'
+                ? 'text-white shadow-xs'
+                : 'hover:opacity-80 font-semibold'
             }`}
+            style={{
+              backgroundColor: activeTab === 'schedule' ? (config.mainColor || '#1A3B6B') : undefined,
+              color: activeTab === 'schedule' ? '#ffffff' : (config.mainColor || '#1A3B6B'),
+            }}
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>{t.navSchedule || '일정표'}</span>
+            <span>{t.navSchedule || '한국어학당 일정'}</span>
           </button>
         </nav>
       </div>

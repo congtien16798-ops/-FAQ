@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
   HelpCircle,
@@ -15,48 +15,99 @@ import {
   MessageSquare,
   Sparkles,
   ArrowRight,
-  Globe
+  Globe,
+  Calendar,
+  Languages,
+  RotateCcw
 } from 'lucide-react';
-import { FaqItem, DocumentItem, Language } from '../types';
+import { FaqItem, DocumentItem, ScheduleEvent, Language } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText, translateHtml } from '../services/translator';
+import {
+  translateText,
+  translateHtml,
+  detectLanguage,
+  getLangMeta,
+  detectAndTranslateSearchQuery,
+  SearchQueryDetection,
+  LanguageMeta,
+  MULTI_LANG_SEARCH_LEXICON
+} from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
 
 interface IntegratedSearchResultsProps {
   faqs: FaqItem[];
   documents: DocumentItem[];
+  schedules?: ScheduleEvent[];
   searchQuery: string;
   onClearSearch: () => void;
   currentLang: Language;
   onNavigateTab: (tab: 'faq' | 'downloads' | 'inquiry' | 'schedule') => void;
+  onSelectLanguage?: (lang: Language) => void;
 }
 
 export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = ({
   faqs,
   documents,
+  schedules = [],
   searchQuery,
   onClearSearch,
   currentLang,
   onNavigateTab,
+  onSelectLanguage,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
 
-  const [searchFilterTab, setSearchFilterTab] = useState<'all' | 'faq' | 'docs'>('all');
+  const [searchFilterTab, setSearchFilterTab] = useState<'all' | 'faq' | 'docs' | 'schedule'>('all');
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
 
-  // Auto translations
+  // 1. Language Detection & Search Keyword Mapping State for backend matching
+  const [detection, setDetection] = useState<SearchQueryDetection>(() => {
+    const d = detectLanguage(searchQuery);
+    return {
+      originalQuery: searchQuery,
+      detectedLang: d,
+      translatedKorean: '',
+      searchKeywords: [searchQuery],
+      langMeta: getLangMeta(d),
+    };
+  });
+  const [, setIsTranslatingDetection] = useState(false);
+
+  // Trigger language detection & Korean translation on query change for cross-lingual search matching
+  useEffect(() => {
+    let isMounted = true;
+    const runDetection = async () => {
+      setIsTranslatingDetection(true);
+      const res = await detectAndTranslateSearchQuery(searchQuery);
+      if (isMounted) {
+        setDetection(res);
+        setIsTranslatingDetection(false);
+      }
+    };
+    runDetection();
+    return () => {
+      isMounted = false;
+    };
+  }, [searchQuery]);
+
+  // Determine effective display language for the results (respecting user portal currentLang)
+  const effectiveDisplayLang: Language = currentLang;
+
+  // 2. Dynamic Auto Translations for Content
   const [transFaqMap, setTransFaqMap] = useState<Record<string, { title: string; content: string }>>({});
   const [transDocMap, setTransDocMap] = useState<Record<string, { title: string; description: string }>>({});
+  const [transScheduleMap, setTransScheduleMap] = useState<Record<string, { title: string; description: string; location: string }>>({});
   const [catTranslations, setCatTranslations] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (currentLang === 'ko') {
+    if (effectiveDisplayLang === 'ko') {
       setTransFaqMap({});
       setTransDocMap({});
+      setTransScheduleMap({});
       setCatTranslations({});
       return;
     }
@@ -66,32 +117,45 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
       // 1. FAQs
       const newFaqMap: Record<string, { title: string; content: string }> = {};
       for (const faq of faqs) {
-        const transTitle = await translateText(faq.title, currentLang);
-        const transContent = await translateHtml(faq.content, currentLang);
+        if (!faq) continue;
+        const transTitle = await translateText(faq.title, effectiveDisplayLang);
+        const transContent = await translateHtml(faq.content, effectiveDisplayLang);
         newFaqMap[faq.id] = { title: transTitle, content: transContent };
       }
 
       // 2. Docs
       const newDocMap: Record<string, { title: string; description: string }> = {};
       for (const doc of documents) {
-        const transTitle = await translateText(doc.title, currentLang);
-        const transDesc = await translateText(doc.description, currentLang);
+        if (!doc) continue;
+        const transTitle = await translateText(doc.title, effectiveDisplayLang);
+        const transDesc = await translateText(doc.description, effectiveDisplayLang);
         newDocMap[doc.id] = { title: transTitle, description: transDesc };
       }
 
-      // 3. Categories
+      // 3. Schedules
+      const newScheduleMap: Record<string, { title: string; description: string; location: string }> = {};
+      for (const sch of schedules) {
+        if (!sch) continue;
+        const transTitle = await translateText(sch.title, effectiveDisplayLang);
+        const transDesc = sch.description ? await translateText(sch.description, effectiveDisplayLang) : '';
+        const transLoc = sch.location ? await translateText(sch.location, effectiveDisplayLang) : '';
+        newScheduleMap[sch.id] = { title: transTitle, description: transDesc, location: transLoc };
+      }
+
+      // 4. Categories
       const newCatMap: Record<string, string> = {};
       for (const cat of config.categories || []) {
-        if (cat.name[currentLang]) {
-          newCatMap[cat.id] = cat.name[currentLang]!;
+        if (cat.name[effectiveDisplayLang]) {
+          newCatMap[cat.id] = cat.name[effectiveDisplayLang]!;
         } else {
-          newCatMap[cat.id] = await translateText(cat.name.ko, currentLang);
+          newCatMap[cat.id] = await translateText(cat.name.ko, effectiveDisplayLang);
         }
       }
 
       if (isMounted) {
         setTransFaqMap(newFaqMap);
         setTransDocMap(newDocMap);
+        setTransScheduleMap(newScheduleMap);
         setCatTranslations(newCatMap);
       }
     };
@@ -100,10 +164,102 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
     return () => {
       isMounted = false;
     };
-  }, [currentLang, faqs, documents, config.categories]);
+  }, [effectiveDisplayLang, faqs, documents, schedules, config.categories]);
 
-  // Normalize query
+  // Normalize query tokens
   const q = (searchQuery || '').trim().toLowerCase();
+  const rawTokens = q.split(/\s+/).filter(Boolean);
+
+  // Translated Korean tokens
+  const koTranslatedTokens = (detection.translatedKorean || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  // Search keywords from detection / lexicon
+  const allSearchKeywords = useMemo(() => {
+    const list = [
+      ...rawTokens,
+      ...koTranslatedTokens,
+      ...(detection.searchKeywords || []).map((k) => k.toLowerCase()),
+    ];
+    return Array.from(new Set(list)).filter((k) => k && k.length > 0);
+  }, [rawTokens, koTranslatedTokens, detection.searchKeywords]);
+
+  // Helper matcher function
+  const matchesSearch = (itemKoText: string, itemTransText: string = ''): boolean => {
+    if (!q) return true;
+    const textKo = (itemKoText || '').toLowerCase();
+    const textTrans = (itemTransText || '').toLowerCase();
+    const combined = `${textKo} ${textTrans}`;
+
+    // 1. Direct match with all raw native tokens
+    if (rawTokens.length > 0 && rawTokens.every((tok) => combined.includes(tok))) {
+      return true;
+    }
+
+    // 2. Direct match with any Korean translated tokens
+    if (koTranslatedTokens.length > 0 && koTranslatedTokens.some((tok) => textKo.includes(tok))) {
+      return true;
+    }
+
+    // 3. Match against search keywords from multi-language lexicon
+    if (allSearchKeywords.some((kw) => textKo.includes(kw) || textTrans.includes(kw))) {
+      return true;
+    }
+
+    // 4. Any raw token match for multi-word queries
+    if (rawTokens.length > 1 && rawTokens.some((tok) => combined.includes(tok))) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Helper for Term Keywords
+  const getTermKeywords = (term: string) => {
+    switch (term) {
+      case 'spring': return '봄학기 봄 spring 1학기 mùa xuân 春季 хавар';
+      case 'summer': return '여름학기 여름 summer 계절학기 mùa hè 夏季 зун';
+      case 'fall': return '가을학기 가을 fall autumn 2학기 mùa thu 秋季 намар';
+      case 'winter': return '겨울학기 겨울 winter mùa đông 冬季 өвөл';
+      default: return '특별과정 special';
+    }
+  };
+
+  // Helper for Event Type Keywords
+  const getTypeKeywords = (type: string) => {
+    switch (type) {
+      case 'academic': return '학사 수업 개강 종강 등록금 수강 academic course class';
+      case 'exam': return '시험 평가 중간고사 기말고사 레벨테스트 exam test evaluation thi 考试 шалгалт';
+      case 'holiday': return '휴일 방학 공휴일 연휴 설날 추석 holiday vacation break nghỉ lễ 放假 амралт';
+      case 'activity': return '문화체험 문화활동 체험학습 현장체험 야유회 activity culture trip trải nghiệm 体验';
+      case 'admission': return '모집 등록 원서접수 서류제출 admission registration apply nhập học 招生';
+      default: return '일정 행정 schedule event';
+    }
+  };
+
+  // Helper for Date Formats
+  const getDateKeywords = (start: string, end?: string) => {
+    const dates = [start, end].filter(Boolean);
+    const kw: string[] = [];
+    dates.forEach((d) => {
+      if (!d) return;
+      kw.push(d); // 2026-03-02
+      const parts = d.split('-');
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        const mNum = parseInt(month, 10);
+        const dNum = parseInt(day, 10);
+        kw.push(`${year}.${month}.${day}`);
+        kw.push(`${year}.${mNum}.${dNum}`);
+        kw.push(`${mNum}월`);
+        kw.push(`${mNum}월 ${dNum}일`);
+        kw.push(`${month}월`);
+      }
+    });
+    return kw.join(' ');
+  };
 
   // Matched FAQs
   const matchedFaqs = (faqs || []).filter((faq) => {
@@ -113,32 +269,85 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
     const hasContent = plainContent !== '' || !!faq.imageUrl || (faq.content || '').includes('<img');
     if (!hasTitle || !hasContent) return false;
     if (!q) return true;
-    return (
-      (faq.title?.toLowerCase() || '').includes(q) ||
-      (faq.content?.toLowerCase() || '').includes(q) ||
-      (faq.category?.toLowerCase() || '').includes(q)
-    );
+
+    const trans = transFaqMap[faq.id];
+    const searchableKo = [
+      faq.title,
+      faq.content,
+      faq.category,
+    ].join(' ');
+    const searchableTrans = [
+      trans?.title || '',
+      trans?.content || '',
+    ].join(' ');
+
+    return matchesSearch(searchableKo, searchableTrans);
   });
 
   // Matched Documents
   const matchedDocs = (documents || []).filter((doc) => {
     if (!doc || doc.hidden) return false;
     if (!q) return true;
-    return (
-      (doc.title?.toLowerCase() || '').includes(q) ||
-      (doc.description?.toLowerCase() || '').includes(q) ||
-      (doc.fileName?.toLowerCase() || '').includes(q) ||
-      (doc.category?.toLowerCase() || '').includes(q)
-    );
+
+    const trans = transDocMap[doc.id];
+    const searchableKo = [
+      doc.title,
+      doc.description,
+      doc.fileName,
+      doc.category,
+    ].join(' ');
+    const searchableTrans = [
+      trans?.title || '',
+      trans?.description || '',
+    ].join(' ');
+
+    return matchesSearch(searchableKo, searchableTrans);
   });
 
-  const totalMatches = matchedFaqs.length + matchedDocs.length;
+  // Matched Schedules (한국어학당 일정)
+  const matchedSchedules = (schedules || []).filter((sch) => {
+    if (!sch || sch.hidden) return false;
+    if (!q) return true;
+
+    const trans = transScheduleMap[sch.id];
+    const searchableKo = [
+      sch.title || '',
+      sch.titleEn || '',
+      sch.description || '',
+      sch.location || '',
+      sch.term || '',
+      sch.type || '',
+      getTermKeywords(sch.term || ''),
+      getTypeKeywords(sch.type || ''),
+      getDateKeywords(sch.startDate, sch.endDate),
+      '한국어학당 일정 일정표 학사일정 schedule calendar lịch 日程 хуваарь',
+    ].join(' ');
+    const searchableTrans = [
+      trans?.title || '',
+      trans?.description || '',
+      trans?.location || '',
+    ].join(' ');
+
+    return matchesSearch(searchableKo, searchableTrans);
+  });
+
+  const totalMatches = matchedFaqs.length + matchedDocs.length + matchedSchedules.length;
+
+  const getTermLabel = (term: string) => {
+    switch (term) {
+      case 'spring': return effectiveDisplayLang === 'en' ? 'Spring' : '봄학기';
+      case 'summer': return effectiveDisplayLang === 'en' ? 'Summer' : '여름학기';
+      case 'fall': return effectiveDisplayLang === 'en' ? 'Fall' : '가을학기';
+      case 'winter': return effectiveDisplayLang === 'en' ? 'Winter' : '겨울학기';
+      default: return '특별과정';
+    }
+  };
 
   const handleCopyUrl = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const url = `${window.location.origin}${window.location.pathname}#faq-${id}`;
     navigator.clipboard.writeText(url).then(() => {
-      setCopyToast(t.urlCopied);
+      setCopyToast(t.urlCopied || 'URL이 복사되었습니다.');
       setTimeout(() => setCopyToast(null), 3000);
     });
   };
@@ -185,7 +394,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
   const getFaqCategoryLabel = (catId: string) => {
     const found = config.categories?.find((c) => c.id === catId);
     if (found) {
-      return catTranslations[catId] || found.name[currentLang] || found.name.ko || found.id;
+      return catTranslations[catId] || found.name[effectiveDisplayLang] || found.name.ko || found.id;
     }
     return catId;
   };
@@ -224,7 +433,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
             <span className="text-xs font-normal text-gray-500">통합 검색 결과</span>
           </h2>
           <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-            FAQ(<strong className="text-[#1A3B6B]">{matchedFaqs.length}</strong>건)과 서식·자료실(<strong className="text-[#2E7D5B]">{matchedDocs.length}</strong>건)을 종합 검색한 결과입니다.
+            FAQ(<strong className="text-[#1A3B6B]">{matchedFaqs.length}</strong>건), 서식·자료실(<strong className="text-[#2E7D5B]">{matchedDocs.length}</strong>건), 한국어학당 일정(<strong className="text-[#1A3B6B]">{matchedSchedules.length}</strong>건)을 종합 검색한 결과입니다.
           </p>
         </div>
 
@@ -239,7 +448,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
         </div>
       </div>
 
-      {/* Filter Tabs: All vs FAQs vs Documents */}
+      {/* Filter Tabs: All vs FAQs vs Documents vs Schedules */}
       <div className="flex items-center gap-1.5 sm:gap-2 border-b border-[#E2E5E8] pb-2.5 overflow-x-auto no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
         <button
           onClick={() => setSearchFilterTab('all')}
@@ -296,9 +505,28 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
             {matchedDocs.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setSearchFilterTab('schedule')}
+          className={`px-3.5 sm:px-4 py-2 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+            searchFilterTab === 'schedule'
+              ? 'bg-[#1A3B6B] text-white shadow-xs'
+              : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>한국어학당 일정</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              searchFilterTab === 'schedule' ? 'bg-white/20 text-white font-mono' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {matchedSchedules.length}
+          </span>
+        </button>
       </div>
 
-      {/* Case 0: Empty Results in both sections */}
+      {/* Case 0: Empty Results */}
       {totalMatches === 0 && (
         <div className="bg-white rounded-md border border-[#E2E5E8] p-12 text-center text-gray-600 space-y-4 shadow-xs">
           <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto text-gray-400">
@@ -309,7 +537,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
               &lsquo;{searchQuery}&rsquo;에 대한 검색 결과를 찾을 수 없습니다.
             </h3>
             <p className="text-xs text-gray-500 max-w-md mx-auto leading-relaxed">
-              단어의 철자가 맞는지 확인하시거나 보다 일반적인 키워드(예: 비자, 출석, 기숙사, 외박, 신청서)로 다시 검색해 보세요.
+              다른 키워드로 검색해 보세요. (예: 비자, 출석, 기숙사, 외박, 신청서, visa, dormitory, attendance)
             </p>
           </div>
 
@@ -371,10 +599,11 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                     className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50/80 transition-colors select-none min-h-[44px]"
                   >
                     <div className="flex items-center gap-2 sm:gap-2.5 flex-1 min-w-0 pr-2 sm:pr-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#1A3B6B] border border-blue-200 shrink-0">
+                      <span className="text-xs sm:text-sm font-bold text-gray-900 shrink-0">
                         {catBadge}
                       </span>
-                      <h4 className="text-xs sm:text-sm font-semibold text-gray-900 truncate">
+                      <span className="w-px h-3.5 bg-gray-300/80 shrink-0" aria-hidden="true" />
+                      <h4 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
                         {titleToRender}
                       </h4>
                     </div>
@@ -395,7 +624,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                       />
 
                       <div className="mt-4 pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[11px] text-gray-500">
-                        <span className="font-mono">
+                        <span className="font-medium text-gray-500">
                           등록일: {new Date(faq.createdAt).toLocaleDateString('ko-KR')}
                         </span>
                         <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -464,27 +693,29 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                           {badge.label}
                         </span>
                       </div>
-                      <span className="text-[11px] text-gray-400 font-mono">
+                      <span className="font-mono text-[10px] text-gray-400">
                         {doc.fileSize}
                       </span>
                     </div>
 
                     <div>
-                      <h4 className="font-bold text-gray-900 text-xs sm:text-sm">
+                      <h4 className="text-xs font-bold text-gray-900 leading-snug">
                         {titleToRender}
                       </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">
-                        {descToRender}
-                      </p>
+                      {descToRender && (
+                        <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                          {descToRender}
+                        </p>
+                      )}
                     </div>
 
                     <div className="pt-1">
                       <button
                         onClick={() => handleDownloadDoc(doc)}
-                        className="w-full py-2 px-3 rounded bg-[#2E7D5B] hover:bg-[#25664a] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
+                        className="w-full py-1.5 px-3 rounded bg-emerald-50 hover:bg-emerald-100 text-[#2E7D5B] text-xs font-bold border border-emerald-200 flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>서식 다운로드 ({badge.label})</span>
+                        <span>서식 다운로드</span>
                       </button>
                     </div>
                   </div>
@@ -492,16 +723,16 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
               })}
             </div>
 
-            {/* TABLET & DESKTOP VIEW (>= 640px): Standard Table */}
+            {/* DESKTOP VIEW (>= 640px): Table */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
-                    <th className="py-2.5 px-3 w-24">분류</th>
-                    <th className="py-2.5 px-3 w-16 text-center">형식</th>
-                    <th className="py-2.5 px-4">서식명 및 상세 설명</th>
-                    <th className="py-2.5 px-3 w-20 text-center">용량</th>
-                    <th className="py-2.5 px-3 w-20 text-center">다운로드</th>
+                  <tr className="bg-gray-50 border-b border-[#E2E5E8] text-gray-600 font-semibold">
+                    <th className="py-2.5 px-4 w-24">분류</th>
+                    <th className="py-2.5 px-4 w-20">형식</th>
+                    <th className="py-2.5 px-4">서식명 및 상세 안내</th>
+                    <th className="py-2.5 px-4 w-24 text-center">용량</th>
+                    <th className="py-2.5 px-4 w-28 text-center">다운로드</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -511,34 +742,35 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                     const descToRender = transDocMap[doc.id]?.description || doc.description;
 
                     return (
-                      <tr key={doc.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="py-3 px-3 text-gray-500 font-medium">
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-700">
-                            {doc.category}
-                          </span>
+                      <tr key={doc.id} className="hover:bg-emerald-50/20 transition-colors">
+                        <td className="py-3 px-4 text-gray-600 font-medium">
+                          {doc.category}
                         </td>
-                        <td className="py-3 px-3 text-center">
-                          <span
-                            className={`inline-block px-1.5 py-0.5 text-[10px] font-extrabold rounded border ${badge.color}`}
-                          >
+                        <td className="py-3 px-4">
+                          <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border ${badge.color}`}>
                             {badge.label}
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <p className="font-bold text-gray-900 text-xs mb-0.5">{titleToRender}</p>
-                          <p className="text-[11px] text-gray-500 leading-relaxed">{descToRender}</p>
+                          <div className="font-semibold text-gray-900">
+                            {titleToRender}
+                          </div>
+                          {descToRender && (
+                            <div className="text-gray-500 text-[11px] mt-0.5 line-clamp-1">
+                              {descToRender}
+                            </div>
+                          )}
                         </td>
-                        <td className="py-3 px-3 text-center text-gray-400 font-mono text-[11px]">
+                        <td className="py-3 px-4 text-center font-mono text-gray-500 text-[11px]">
                           {doc.fileSize}
                         </td>
-                        <td className="py-3 px-3 text-center">
+                        <td className="py-3 px-4 text-center">
                           <button
                             onClick={() => handleDownloadDoc(doc)}
-                            className="inline-flex items-center justify-center p-2 rounded text-white bg-[#2E7D5B] hover:bg-[#25664a] shadow-2xs transition-colors cursor-pointer"
-                            title={`'${doc.fileName}' 서식 다운로드`}
-                            aria-label={`'${doc.fileName}' 서식 다운로드`}
+                            className="px-3 py-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-[#2E7D5B] text-xs font-bold border border-emerald-200 inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
                           >
                             <Download className="w-3.5 h-3.5" />
+                            <span>다운로드</span>
                           </button>
                         </td>
                       </tr>
@@ -547,6 +779,75 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 3: SCHEDULE MATCHES (한국어학당 일정 검색 결과) */}
+      {(searchFilterTab === 'all' || searchFilterTab === 'schedule') && matchedSchedules.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+            <h3 className="text-sm font-bold text-[#1A3B6B] flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-[#1A3B6B]" />
+              <span>한국어학당 일정 검색 결과</span>
+              <span className="text-xs font-normal text-gray-500">({matchedSchedules.length}건)</span>
+            </h3>
+
+            {searchFilterTab === 'all' && matchedSchedules.length > 3 && (
+              <button
+                onClick={() => setSearchFilterTab('schedule')}
+                className="text-xs text-[#1A3B6B] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>일정 결과 전체보기 ({matchedSchedules.length})</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(searchFilterTab === 'all' ? matchedSchedules.slice(0, 4) : matchedSchedules).map((sch) => (
+              <div
+                key={sch.id}
+                onClick={() => onNavigateTab('schedule')}
+                className="bg-white rounded-md border border-gray-200 p-3.5 hover:border-[#1A3B6B] hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#1A3B6B] border border-blue-200">
+                      {getTermLabel(sch.term)}
+                    </span>
+                    {sch.important && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                        ★ 주요 일정
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-sm font-bold text-gray-900 group-hover:text-[#1A3B6B] transition-colors">
+                    {transScheduleMap[sch.id]?.title || sch.title}
+                  </h4>
+                  {(transScheduleMap[sch.id]?.description || sch.description) && (
+                    <p className="text-xs text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                      {transScheduleMap[sch.id]?.description || sch.description}
+                    </p>
+                  )}
+                  {(transScheduleMap[sch.id]?.location || sch.location) && sch.location !== '-' && (
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      📍 {transScheduleMap[sch.id]?.location || sch.location}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                  <div className="font-mono text-[11px] font-semibold text-gray-700">
+                    📅 {sch.startDate} {sch.startDate !== sch.endDate && `~ ${sch.endDate}`}
+                  </div>
+                  <span className="text-[11px] text-[#1A3B6B] font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    <span>일정 보기</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

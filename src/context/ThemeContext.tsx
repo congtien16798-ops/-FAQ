@@ -80,7 +80,43 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty('--accent-color', cfg.accentColor || '#2E7D5B');
     root.style.setProperty('--warn-color', cfg.warnColor || '#D97736');
     root.style.setProperty('--border-radius', `${cfg.borderRadius ?? 6}px`);
-    root.style.setProperty('--font-scale', cfg.fontSize === 'large' ? '1.08rem' : '1rem');
+
+    // Font Family Mapping
+    const fontMap: Record<string, string> = {
+      noto: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      pretendard: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      nanum: "'Nanum Gothic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      gowun: "'Gowun Dodum', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      system: "-apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    };
+    root.style.setProperty('--app-font-family', fontMap[cfg.fontFamily || 'noto'] || fontMap.noto);
+
+    // Font Size Scale
+    const scale = cfg.fontSizeScale || (cfg.fontSize === 'large' ? 'large' : 'standard');
+    const scaleMap: Record<string, string> = {
+      compact: '0.9375rem',
+      standard: '1rem',
+      large: '1.0625rem',
+      xlarge: '1.125rem',
+    };
+    root.style.setProperty('--font-scale', scaleMap[scale] || '1rem');
+
+    // Font Heading Weight
+    const weightMap: Record<string, string> = {
+      medium: '600',
+      bold: '700',
+      black: '800',
+    };
+    root.style.setProperty('--heading-weight', weightMap[cfg.fontHeadingWeight || 'bold'] || '700');
+
+    // Line Height
+    const lhMap: Record<string, string> = {
+      compact: '1.45',
+      normal: '1.6',
+      spacious: '1.75',
+    };
+    root.style.setProperty('--line-height-scale', lhMap[cfg.fontLineHeight || 'normal'] || '1.6');
   };
 
   // On mount: listen to real-time site_config changes
@@ -194,7 +230,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // ignore
       }
 
-      setSaveMessage('설정이 성공적으로 게시 및 적용되었으며, 보관함에 새 버전이 보관되었습니다.');
+      setSaveMessage('디자인 설정이 성공적으로 저장되었습니다.');
       setTimeout(() => setSaveMessage(null), 3500);
       setIsSaving(false);
       return true;

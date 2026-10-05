@@ -73,8 +73,9 @@ export const InquirySettings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Live Auto-Translation Preview State
-  const [previewLang, setPreviewLang] = useState<Language>('en');
+  // Live Auto-Translation Preview State (기본값 한국어로 설정하여 실시간 타이핑 즉시 반영)
+  const [previewLang, setPreviewLang] = useState<Language>('ko');
+  const [previewMode, setPreviewMode] = useState<'form' | 'success'>('form');
   const [isTranslatingPreview, setIsTranslatingPreview] = useState(false);
   const [translatedData, setTranslatedData] = useState<{
     title: string;
@@ -121,23 +122,7 @@ export const InquirySettings: React.FC = () => {
   const handleLoadTranslationPreview = async (lang: Language) => {
     setPreviewLang(lang);
     if (lang === 'ko') {
-      setTranslatedData({
-        title,
-        subtitle,
-        badge: badgeText,
-        notice,
-        studentIdLabel,
-        studentIdPlaceholder,
-        nameLabel,
-        namePlaceholder,
-        contentLabel,
-        contentPlaceholder,
-        privacyNotice,
-        privacyConsentText,
-        successTitle,
-        successDesc,
-        pausedNotice,
-      });
+      setTranslatedData(null);
       return;
     }
 
@@ -195,23 +180,7 @@ export const InquirySettings: React.FC = () => {
         pausedNotice: tPausedNotice,
       });
     } catch {
-      setTranslatedData({
-        title,
-        subtitle,
-        badge: badgeText,
-        notice,
-        studentIdLabel,
-        studentIdPlaceholder,
-        nameLabel,
-        namePlaceholder,
-        contentLabel,
-        contentPlaceholder,
-        privacyNotice,
-        privacyConsentText,
-        successTitle,
-        successDesc,
-        pausedNotice,
-      });
+      setTranslatedData(null);
     } finally {
       setIsTranslatingPreview(false);
     }
@@ -680,6 +649,19 @@ export const InquirySettings: React.FC = () => {
                   {lang.label}
                 </button>
               ))}
+
+              {previewLang !== 'ko' && (
+                <button
+                  type="button"
+                  onClick={() => handleLoadTranslationPreview(previewLang)}
+                  disabled={isTranslatingPreview}
+                  className="px-2 py-1 text-[11px] rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 font-bold ml-auto flex items-center gap-1 cursor-pointer transition-colors"
+                  title="현재 입력된 한글 설정 내용을 이 언어로 다시 번역합니다"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isTranslatingPreview ? 'animate-spin' : ''}`} />
+                  <span>번역 새로고침</span>
+                </button>
+              )}
             </div>
 
             {isTranslatingPreview && (
@@ -691,113 +673,189 @@ export const InquirySettings: React.FC = () => {
           </div>
 
           {/* LIVE FORM MOCKUP (STUDENT VIEW) */}
-          <div className="border border-gray-300 rounded-lg shadow-sm bg-white overflow-hidden">
-            <div className="bg-[#2E7D5B] px-4 py-2.5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4" />
-                <span className="text-xs font-bold">학생 화면 실시간 미리보기 (Live Mockup)</span>
-              </div>
-              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono uppercase">
-                {previewLang}
-              </span>
-            </div>
+          {(() => {
+            const isKo = previewLang === 'ko';
+            const displayBadge = isKo ? badgeText : (translatedData?.badge || badgeText);
+            const displayTitle = isKo ? title : (translatedData?.title || title);
+            const displaySubtitle = isKo ? subtitle : (translatedData?.subtitle || subtitle);
+            const displayNotice = isKo ? notice : (translatedData?.notice || notice);
+            const displayStudentIdLabel = isKo ? studentIdLabel : (translatedData?.studentIdLabel || studentIdLabel);
+            const displayStudentIdPlaceholder = isKo ? studentIdPlaceholder : (translatedData?.studentIdPlaceholder || studentIdPlaceholder);
+            const displayNameLabel = isKo ? nameLabel : (translatedData?.nameLabel || nameLabel);
+            const displayNamePlaceholder = isKo ? namePlaceholder : (translatedData?.namePlaceholder || namePlaceholder);
+            const displayContentLabel = isKo ? contentLabel : (translatedData?.contentLabel || contentLabel);
+            const displayContentPlaceholder = isKo ? contentPlaceholder : (translatedData?.contentPlaceholder || contentPlaceholder);
+            const displayPrivacyNotice = isKo ? privacyNotice : (translatedData?.privacyNotice || privacyNotice);
+            const displayPrivacyConsentText = isKo ? privacyConsentText : (translatedData?.privacyConsentText || privacyConsentText);
+            const displayPausedNotice = isKo ? pausedNotice : (translatedData?.pausedNotice || pausedNotice);
+            const displaySuccessTitle = isKo ? successTitle : (translatedData?.successTitle || successTitle);
+            const displaySuccessDesc = isKo ? successDesc : (translatedData?.successDesc || successDesc);
 
-            <div className="p-4 bg-gray-50/70 space-y-4 text-xs">
-              {/* Header inside mockup */}
-              <div className="pb-3 border-b border-gray-200">
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#2E7D5B]/10 text-[#2E7D5B] mb-1.5">
-                  <Lock className="w-3 h-3" />
-                  <span>{translatedData?.badge || badgeText}</span>
+            return (
+              <div className="border border-gray-300 rounded-lg shadow-sm bg-white overflow-hidden">
+                <div className="bg-[#2E7D5B] px-4 py-2.5 text-white flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4" />
+                    <span className="text-xs font-bold">학생 화면 실시간 미리보기 (Live Mockup)</span>
+                  </div>
+
+                  {/* Mode Toggle: Form vs Success Modal */}
+                  <div className="flex items-center gap-1 bg-white/20 p-0.5 rounded text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('form')}
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                        previewMode === 'form' ? 'bg-white text-[#2E7D5B] shadow-2xs' : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      접수 폼 화면
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('success')}
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                        previewMode === 'success' ? 'bg-white text-[#2E7D5B] shadow-2xs' : 'text-white hover:bg-white/10'
+                      }`}
+                    >
+                      완료 팝업
+                    </button>
+                  </div>
                 </div>
-                <h4 className="text-sm font-bold text-[#1A3B6B]">
-                  {translatedData?.title || title}
-                </h4>
-                <p className="text-[11px] text-gray-500 mt-0.5">
-                  {translatedData?.subtitle || subtitle}
-                </p>
 
-                {(translatedData?.notice || notice) && (
-                  <div className="mt-2.5 p-2 bg-blue-50 border border-blue-200 rounded text-[10px] text-blue-900 leading-relaxed">
-                    ℹ️ {translatedData?.notice || notice}
-                  </div>
-                )}
-              </div>
-
-              {/* Form fields mockup */}
-              <div className="bg-white p-3.5 rounded border border-gray-200 space-y-3">
-                {!enabled ? (
-                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-center">
-                    <p className="font-bold text-xs">접수 일시 중단 안내</p>
-                    <p className="text-[11px] mt-1">{translatedData?.pausedNotice || pausedNotice}</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="block text-[10px] font-semibold text-gray-600 mb-1">
-                          {translatedData?.studentIdLabel || studentIdLabel} *
-                        </span>
-                        <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
-                          {translatedData?.studentIdPlaceholder || studentIdPlaceholder}
-                        </div>
+                <div className="p-4 bg-gray-50/70 space-y-4 text-xs">
+                  {previewMode === 'success' ? (
+                    /* SUCCESS COMPLETION MODAL PREVIEW */
+                    <div className="bg-white p-6 rounded-lg border border-gray-200 text-center space-y-3.5 shadow-xs animate-in fade-in">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 text-[#2E7D5B] flex items-center justify-center mx-auto border border-emerald-200">
+                        <CheckCircle2 className="w-6 h-6" />
                       </div>
                       <div>
-                        <span className="block text-[10px] font-semibold text-gray-600 mb-1">
-                          {translatedData?.nameLabel || nameLabel} *
-                        </span>
-                        <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
-                          {translatedData?.namePlaceholder || namePlaceholder}
+                        <h4 className="font-bold text-sm text-gray-900 leading-snug">
+                          {displaySuccessTitle}
+                        </h4>
+                        <p className="text-xs text-gray-600 mt-1.5 leading-relaxed max-w-sm mx-auto">
+                          {displaySuccessDesc}
+                        </p>
+                      </div>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewMode('form')}
+                          className="px-4 py-2 bg-[#2E7D5B] hover:bg-[#236348] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs"
+                        >
+                          확인 (폼 화면으로 돌아가기)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* REGULAR FORM MOCKUP */
+                    <>
+                      {/* Header inside mockup */}
+                      <div className="pb-3 border-b border-gray-200">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#2E7D5B]/10 text-[#2E7D5B] mb-1.5">
+                          <Lock className="w-3 h-3" />
+                          <span>{displayBadge}</span>
                         </div>
-                      </div>
-                    </div>
+                        <h4 className="text-sm font-bold text-[#1A3B6B]">
+                          {displayTitle}
+                        </h4>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          {displaySubtitle}
+                        </p>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-gray-600">
-                          {translatedData?.contentLabel || contentLabel} *
-                        </span>
-                        <span className="text-[9px] text-gray-400 font-mono">
-                          0 / {maxLength}자 (최소 {minLength}자)
-                        </span>
+                        {displayNotice && (
+                          <div className="mt-2.5 p-2 bg-blue-50 border border-blue-200 rounded text-[10px] text-blue-900 leading-relaxed">
+                            ℹ️ {displayNotice}
+                          </div>
+                        )}
                       </div>
-                      <div className="p-2 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 h-16 leading-relaxed">
-                        {translatedData?.contentPlaceholder || contentPlaceholder}
-                      </div>
-                    </div>
 
-                    {enableQuiz && (
-                      <div className="p-2 bg-gray-100 rounded border border-gray-200 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-gray-700">
-                          스팸방지: 7 + 5 = ?
-                        </span>
-                        <div className="px-3 py-1 bg-white border border-gray-300 rounded text-[10px] text-gray-400">
-                          정답 입력
-                        </div>
-                      </div>
-                    )}
+                      {/* Form fields mockup */}
+                      <div className="bg-white p-3.5 rounded border border-gray-200 space-y-3">
+                        {!enabled ? (
+                          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded text-center">
+                            <p className="font-bold text-xs">접수 일시 중단 안내</p>
+                            <p className="text-[11px] mt-1">{displayPausedNotice}</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="block text-[10px] font-semibold text-gray-600 mb-1">
+                                  {displayStudentIdLabel} *
+                                </span>
+                                <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
+                                  {displayStudentIdPlaceholder}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] font-semibold text-gray-600 mb-1">
+                                  {displayNameLabel} *
+                                </span>
+                                <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
+                                  {displayNamePlaceholder}
+                                </div>
+                              </div>
+                            </div>
 
-                    <div className="space-y-1 pt-1">
-                      <div className="p-2 bg-gray-50 rounded border border-gray-200 text-[10px] text-gray-500 leading-relaxed">
-                        {translatedData?.privacyNotice || privacyNotice}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
-                        <input type="checkbox" readOnly checked className="w-3.5 h-3.5 rounded" />
-                        <span className="font-medium">
-                          {translatedData?.privacyConsentText || privacyConsentText} *
-                        </span>
-                      </div>
-                    </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-semibold text-gray-600">
+                                  {displayContentLabel} *
+                                </span>
+                                <span className="text-[9px] text-gray-400 font-mono">
+                                  0 / {maxLength}자 (최소 {minLength}자)
+                                </span>
+                              </div>
+                              <div className="p-2 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 h-16 leading-relaxed">
+                                {displayContentPlaceholder}
+                              </div>
+                            </div>
 
-                    <div className="pt-2 text-right">
-                      <div className="inline-flex items-center gap-1 px-4 py-1.5 bg-[#2E7D5B] text-white rounded text-[11px] font-bold">
-                        <span>문의 접수하기</span>
+                            {enableQuiz && (
+                              <div className="p-2 bg-gray-100 rounded border border-gray-200 flex items-center justify-between">
+                                <span className="text-[10px] font-semibold text-gray-700">
+                                  스팸방지: 7 + 5 = ?
+                                </span>
+                                <div className="px-3 py-1 bg-white border border-gray-300 rounded text-[10px] text-gray-400">
+                                  정답 입력
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="space-y-1 pt-1">
+                              <div className="p-2 bg-gray-50 rounded border border-gray-200 text-[10px] text-gray-500 leading-relaxed">
+                                {displayPrivacyNotice}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[11px] text-gray-700">
+                                <input type="checkbox" readOnly checked className="w-3.5 h-3.5 rounded" />
+                                <span className="font-medium">
+                                  {displayPrivacyConsentText} *
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 flex items-center justify-between">
+                              <button
+                                type="button"
+                                onClick={() => setPreviewMode('success')}
+                                className="text-[11px] text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                              >
+                                [완료 팝업 시뮬레이션]
+                              </button>
+                              <div className="inline-flex items-center gap-1 px-4 py-1.5 bg-[#2E7D5B] text-white rounded text-[11px] font-bold shadow-xs">
+                                <span>문의 접수하기</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  </>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
     </div>

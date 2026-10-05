@@ -187,156 +187,92 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
         </div>
       </div>
 
-      {/* Downloads List & Table Container */}
-      <div className="bg-white rounded-md border border-[#E2E5E8] overflow-hidden shadow-xs">
+      {/* Downloads List Cards (Unified with FAQ standard) */}
+      <div className="space-y-3">
         {filteredDocs.length === 0 ? (
-          <div className="py-12 text-center text-gray-400 text-xs">
-            등록된 서식이 없습니다.
+          <div className="bg-white rounded-md border border-gray-200 p-12 text-center text-gray-500 shadow-xs">
+            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-gray-700">
+              {t.noResults || '등록된 서식이 없습니다.'}
+            </p>
           </div>
         ) : (
-          <>
-            {/* MOBILE VIEW (< 640px): Touch-Friendly Cards */}
-            <div className="block sm:hidden divide-y divide-gray-100">
-              {filteredDocs.map((doc, idx) => {
-                const formatBadge = getFormatBadge(doc?.fileType);
-                const docId = doc?.id || `fallback-id-${idx}`;
-                const docTitle =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
-                    ? transDocMap[docId].title
-                    : doc.title;
-                const docDesc =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
-                    ? transDocMap[docId].description
-                    : doc.description;
-                const docCategory =
-                  currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
-                    ? transDocMap[docId].category
-                    : doc.category;
+          filteredDocs.map((doc, idx) => {
+            const formatBadge = getFormatBadge(doc?.fileType);
+            const docId = doc?.id || `fallback-id-${idx}`;
+            const docTitle =
+              currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
+                ? transDocMap[docId].title
+                : doc.title;
+            const docDesc =
+              currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
+                ? transDocMap[docId].description
+                : doc.description;
+            const docCategory =
+              currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
+                ? transDocMap[docId].category
+                : doc.category;
 
-                return (
-                  <div key={`doc-card-${docId}-${idx}`} className="p-3.5 space-y-2 hover:bg-blue-50/20 transition-colors">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
-                          {docCategory}
-                        </span>
-                        <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[10px] border ${formatBadge.color}`}>
-                          {formatBadge.label}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-gray-400 font-mono">
-                        {doc.fileSize}
+            return (
+              <div
+                key={`doc-card-${docId}-${idx}`}
+                className="bg-white rounded-md border border-[#E2E5E8] hover:border-gray-300 transition-all shadow-2xs overflow-hidden"
+              >
+                {/* Main Row / Header */}
+                <div className="px-4 py-3.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+                    {/* Category (Bold, same font size as title) */}
+                    <span className="text-sm md:text-base font-bold shrink-0 text-gray-900">
+                      {docCategory}
+                    </span>
+
+                    {/* Semi-transparent Divider Line (반투명 구분선) */}
+                    <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+
+                    {/* Document Title (Bold, same font size as category) */}
+                    <h4 className="text-sm md:text-base font-bold text-gray-800 leading-snug flex-1 truncate sm:whitespace-normal">
+                      {docTitle}
+                    </h4>
+
+                    {/* Format Badge */}
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded font-bold text-[10px] border border-blue-200 bg-blue-50 text-[#1A3B6B] shrink-0">
+                      {formatBadge.label}
+                    </span>
+
+                    {/* File Size */}
+                    <span className="hidden md:inline-block text-[11px] font-medium text-gray-400 shrink-0">
+                      {doc.fileSize}
+                    </span>
+                  </div>
+
+                  {/* Download Action Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleDownload(doc)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-[#142e54] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs min-h-[32px]"
+                      style={{ backgroundColor: config.mainColor }}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{t.downloadForm || '다운로드'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Document Description Body if present */}
+                {docDesc && (
+                  <div className="px-4 pb-3.5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-600 leading-relaxed bg-[#fafafa]/50">
+                    <p className="line-clamp-2">{docDesc}</p>
+                    <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400 sm:hidden">
+                      <span className="px-1.5 py-0.5 rounded font-bold text-[10px] border border-blue-200 bg-blue-50 text-[#1A3B6B]">
+                        {formatBadge.label}
                       </span>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-gray-900 text-xs leading-snug">
-                        {docTitle}
-                      </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 leading-relaxed">
-                        {docDesc}
-                      </p>
-                    </div>
-
-                    <div className="pt-1">
-                      <button
-                        onClick={() => handleDownload(doc)}
-                        className="w-full py-2 px-3 rounded bg-[#1A3B6B] hover:bg-[#142e54] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
-                        style={{ backgroundColor: config.mainColor }}
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>서식 다운로드 ({formatBadge.label})</span>
-                      </button>
+                      <span>{doc.fileSize}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* TABLET & DESKTOP VIEW (>= 640px): Standard Table */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-[#f8f9fa] border-b border-[#E2E5E8] text-gray-600 font-semibold">
-                    <th className="py-3 px-4 w-28">구분</th>
-                    <th className="py-3 px-4">서식 및 자료명</th>
-                    <th className="py-3 px-4 w-20 text-center">형식</th>
-                    <th className="py-3 px-4 w-24 text-center">용량</th>
-                    <th className="py-3 px-4 w-28 text-center">다운로드</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-gray-800">
-                  {filteredDocs.map((doc, idx) => {
-                    const formatBadge = getFormatBadge(doc?.fileType);
-                    const docId = doc?.id || `fallback-id-${idx}`;
-                    const docTitle =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
-                        ? transDocMap[docId].title
-                        : doc.title;
-                    const docDesc =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
-                        ? transDocMap[docId].description
-                        : doc.description;
-                    const docCategory =
-                      currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
-                        ? transDocMap[docId].category
-                        : doc.category;
-
-                    return (
-                      <tr
-                        key={`doc-row-${docId}-${idx}`}
-                        className="hover:bg-blue-50/30 transition-colors"
-                      >
-                        {/* Category */}
-                        <td className="py-3.5 px-4">
-                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700">
-                            {docCategory}
-                          </span>
-                        </td>
-
-                        {/* Title & Description */}
-                        <td className="py-3.5 px-4">
-                          <div className="font-semibold text-gray-900 mb-0.5">
-                            {docTitle}
-                          </div>
-                          <div className="text-gray-500 text-[11px] line-clamp-1">
-                            {docDesc}
-                          </div>
-                        </td>
-
-                        {/* Format Badge */}
-                        <td className="py-3.5 px-4 text-center">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded font-mono font-bold text-[10px] border ${formatBadge.color}`}
-                          >
-                            {formatBadge.label}
-                          </span>
-                        </td>
-
-                        {/* File Size */}
-                        <td className="py-3.5 px-4 text-center text-gray-500 font-mono text-[11px]">
-                          {doc.fileSize}
-                        </td>
-
-                        {/* Download Action Button */}
-                        <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => handleDownload(doc)}
-                            className="inline-flex items-center justify-center p-2 rounded-md bg-[#1A3B6B] hover:bg-[#142e54] text-white transition-colors cursor-pointer shadow-2xs hover:shadow-xs"
-                            style={{ backgroundColor: config.mainColor }}
-                            title={t.downloadForm || '다운로드'}
-                            aria-label={t.downloadForm || '다운로드'}
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Phone, Clock, Mail, MapPin, Instagram, Youtube, ExternalLink } from 'lucide-react';
-import { Language } from '../types';
+import { Language, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText } from '../services/translator';
@@ -8,11 +8,13 @@ import { DEFAULT_RELATED_SITES } from '../constants/initialRelatedSites';
 
 interface FooterProps {
   currentLang: Language;
+  config?: Partial<SiteConfig>;
 }
 
-export const Footer: React.FC<FooterProps> = ({ currentLang }) => {
+export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig }) => {
   const t = translations[currentLang] || translations.ko;
-  const { config } = useTheme();
+  const themeContext = useTheme();
+  const config = { ...themeContext.config, ...(propConfig || {}) };
 
   const [transLocation, setTransLocation] = useState('');
   const [transHours, setTransHours] = useState('');

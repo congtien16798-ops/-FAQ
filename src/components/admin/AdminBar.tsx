@@ -31,30 +31,11 @@ export const AdminBar: React.FC<AdminBarProps> = ({ activeTab, setActiveTab }) =
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        {/* Toggle Design Mode */}
-        <button
-          onClick={() => {
-            setIsDesignMode(!isDesignMode);
-            if (!isDesignMode) {
-              setActiveTab('admin');
-            }
-          }}
-          className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer min-h-[28px] ${
-            isDesignMode
-              ? 'bg-[#D97736] text-white shadow-xs'
-              : 'bg-white/10 hover:bg-white/20 text-white'
-          }`}
-        >
-          <Sparkles className="w-3 h-3 text-amber-300" />
-          <span className="hidden sm:inline">{isDesignMode ? '디자인 모드 종료' : '디자인 모드 (테마)'}</span>
-          <span className="sm:hidden">디자인</span>
-        </button>
-
         {/* Admin Dashboard Tab */}
         <button
           onClick={() => setActiveTab('admin')}
-          className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] sm:text-xs transition-colors cursor-pointer min-h-[28px] ${
-            activeTab === 'admin' && !isDesignMode
+          className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] sm:text-xs transition-colors cursor-pointer min-h-[28px] ${
+            activeTab === 'admin'
               ? 'bg-blue-600 text-white font-semibold'
               : 'bg-white/10 hover:bg-white/20 text-blue-100'
           }`}

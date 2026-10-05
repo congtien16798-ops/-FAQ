@@ -22,8 +22,8 @@ import {
 } from 'lucide-react';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { ScheduleEvent, ScheduleTerm, ScheduleEventType } from '../../types';
-import { INITIAL_SCHEDULES } from '../../constants/initialSchedules';
+import { ScheduleEvent, ScheduleTerm, ScheduleEventType, getScheduleYear } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ScheduleManagerProps {
   schedules: ScheduleEvent[];
@@ -50,10 +50,28 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
   schedules,
   setSchedules,
 }) => {
+  const { config, updateConfig } = useTheme();
+
   const [selectedTermFilter, setSelectedTermFilter] = useState<ScheduleTerm | 'all'>('all');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<ScheduleEventType | 'all'>('all');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<number | 'all'>('all');
   const [selectedVisibilityFilter, setSelectedVisibilityFilter] = useState<'all' | 'visible' | 'hidden'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Current Academic Term Settings State (현재 학기 정보 설정)
+  const [currentSettingYear, setCurrentSettingYear] = useState<number>(() => config.currentAcademicYear || 2026);
+  const [currentSettingTerm, setCurrentSettingTerm] = useState<ScheduleTerm>(
+    () => (config.currentAcademicTerm as ScheduleTerm) || 'spring'
+  );
+  const [isSavingSetting, setIsSavingSetting] = useState(false);
+
+  useEffect(() => {
+    if (config.currentAcademicYear) {
+      setCurrentSettingYear(config.currentAcademicYear);
+    }
+    if (config.currentAcademicTerm) {
+      setCurrentSettingTerm(config.currentAcademicTerm as ScheduleTerm);
+    }
+  }, [config.currentAcademicYear, config.currentAcademicTerm]);
 
   // Drag and Drop State
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -67,8 +85,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
   const [confirmPermanentTarget, setConfirmPermanentTarget] = useState<ScheduleEvent | null>(null);
 
   // Form State
+  const [formYear, setFormYear] = useState<number>(config.currentAcademicYear || 2026);
   const [formTitle, setFormTitle] = useState('');
-  const [formTitleEn, setFormTitleEn] = useState('');
   const [formTerm, setFormTerm] = useState<ScheduleTerm>('spring');
   const [formType, setFormType] = useState<ScheduleEventType>('academic');
   const [formStartDate, setFormStartDate] = useState('');
@@ -114,11 +132,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
   // Open Add Modal
   const handleOpenAddModal = () => {
     setEditingEvent(null);
+    setFormYear(config.currentAcademicYear || 2026);
     setFormTitle('');
-    setFormTitleEn('');
-    setFormTerm('spring');
+    setFormTerm(currentSettingTerm || 'spring');
     setFormType('academic');
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const curYear = config.currentAcademicYear || 2026;
+    const todayStr = `${curYear}-03-01`;
     setFormStartDate(todayStr);
     setFormEndDate(todayStr);
     setFormTime('');
@@ -132,8 +151,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
   // Open Edit Modal
   const handleOpenEditModal = (ev: ScheduleEvent) => {
     setEditingEvent(ev);
+    setFormYear(getScheduleYear(ev));
     setFormTitle(ev.title);
-    setFormTitleEn(ev.titleEn || '');
     setFormTerm(ev.term);
     setFormType(ev.type);
     setFormStartDate(ev.startDate);
@@ -167,7 +186,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       const updated: ScheduleEvent = {
         ...editingEvent,
         title: formTitle.trim(),
-        titleEn: formTitleEn.trim() || undefined,
+        year: formYear,
         term: formTerm,
         type: formType,
         startDate: formStartDate,
@@ -195,7 +214,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       const newEvent: ScheduleEvent = {
         id: newId,
         title: formTitle.trim(),
-        titleEn: formTitleEn.trim() || undefined,
+        year: formYear,
         term: formTerm,
         type: formType,
         startDate: formStartDate,
@@ -346,25 +365,41 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     showToast('일정 순서가 변경되었습니다.');
   };
 
-  // Reset to initial default schedules
-  const handleResetToDefaults = async () => {
-    setSchedules(INITIAL_SCHEDULES);
+  // Save Current Academic Term Setting (현재 학기 정보 설정 기능)
+  const handleSaveCurrentAcademicSetting = async () => {
+    setIsSavingSetting(true);
     try {
-      localStorage.setItem('kmu_schedules_cache', JSON.stringify(INITIAL_SCHEDULES));
-      for (const ev of INITIAL_SCHEDULES) {
-        await setDoc(doc(db, 'schedules', ev.id), ev);
-      }
+      await updateConfig({
+        currentAcademicYear: currentSettingYear,
+        currentAcademicTerm: currentSettingTerm,
+      });
+      const termLabel = TERM_OPTIONS.find((t) => t.value === currentSettingTerm)?.label.split(' ')[0] || '봄학기';
+      showToast(`현재 운영 학기가 ${currentSettingYear}년 ${termLabel}(으)로 성공적으로 설정되었습니다.`);
     } catch (err) {
-      console.warn('Reset error:', err);
+      console.warn('Update academic setting error:', err);
+      showToast('학기 설정 저장 중 오류가 발생했습니다.', 'error');
+    } finally {
+      setIsSavingSetting(false);
     }
-    showToast('기본 일정표로 초기화되었습니다.');
   };
+
+  const settingAvailableYears = Array.from(
+    new Set([
+      config.currentAcademicYear || 2026,
+      2024,
+      2025,
+      2026,
+      2027,
+      2028,
+      ...schedules.map(getScheduleYear),
+    ])
+  ).sort((a, b) => b - a);
 
   // Filtered schedules for table
   const displayedSchedules = schedules.filter((item) => {
     if (!item) return false;
+    if (selectedYearFilter !== 'all' && getScheduleYear(item) !== selectedYearFilter) return false;
     if (selectedTermFilter !== 'all' && item.term !== selectedTermFilter) return false;
-    if (selectedTypeFilter !== 'all' && item.type !== selectedTypeFilter) return false;
     if (selectedVisibilityFilter === 'visible' && item.hidden) return false;
     if (selectedVisibilityFilter === 'hidden' && !item.hidden) return false;
 
@@ -404,7 +439,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <Calendar className="w-4 h-4 text-[#1A3B6B]" />
-              <span>일정표 관리</span>
+              <span>한국어학당 일정 관리</span>
             </h3>
             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">
               총 {schedules.length}개 일정
@@ -423,15 +458,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
         <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
           <button
-            onClick={handleResetToDefaults}
-            className="px-3 py-1.5 rounded text-xs text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 transition-colors flex items-center gap-1 cursor-pointer"
-            title="초기 기본 일정 데이터로 복원"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>기본 일정 복원</span>
-          </button>
-
-          <button
             onClick={handleOpenAddModal}
             className="px-3.5 py-1.5 rounded text-xs font-bold text-white bg-[#1A3B6B] hover:bg-blue-900 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
@@ -441,9 +467,87 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
         </div>
       </div>
 
+      {/* Current Academic Term Settings Card (현재 학기 정보 설정 기능) */}
+      <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-3.5 sm:p-4 my-5 shadow-2xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-xs sm:text-sm text-[#1A3B6B]">현재 학기 정보 설정</span>
+              <span className="text-[10px] font-semibold bg-[#1A3B6B] text-white px-2 py-0.5 rounded-full">
+                학생 포털 기본 적용
+              </span>
+            </div>
+            <p className="text-xs text-gray-600 mt-0.5">
+              학생들이 한국어학당 일정 탭에 접속했을 때 기본값으로 표시할 년도와 학기를 설정합니다.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs shadow-2xs">
+              <span className="text-gray-500 font-medium">년도:</span>
+              <select
+                value={currentSettingYear}
+                onChange={(e) => setCurrentSettingYear(Number(e.target.value))}
+                className="font-bold text-gray-900 bg-transparent focus:outline-hidden cursor-pointer"
+              >
+                {settingAvailableYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}년도
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-white border border-gray-300 rounded px-2.5 py-1.5 text-xs shadow-2xs">
+              <span className="text-gray-500 font-medium">학기:</span>
+              <select
+                value={currentSettingTerm}
+                onChange={(e) => setCurrentSettingTerm(e.target.value as ScheduleTerm)}
+                className="font-bold text-gray-900 bg-transparent focus:outline-hidden cursor-pointer"
+              >
+                <option value="spring">봄학기</option>
+                <option value="summer">여름학기</option>
+                <option value="fall">가을학기</option>
+                <option value="winter">겨울학기</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleSaveCurrentAcademicSetting}
+              disabled={isSavingSetting}
+              className="px-3.5 py-1.5 bg-[#1A3B6B] hover:bg-blue-900 text-white font-bold rounded text-xs transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isSavingSetting ? '저장 중...' : '현재 학기 설정 저장'}</span>
+            </button>
+          </div>
+        </div>
+        <div className="mt-2 text-[11px] text-gray-500 flex items-center gap-1">
+          <span>현재 저장된 기준:</span>
+          <strong className="text-[#1A3B6B] font-bold">
+            {config.currentAcademicYear || 2026}년 {TERM_OPTIONS.find((t) => t.value === (config.currentAcademicTerm || 'spring'))?.label.split(' ')[0] || '봄학기'}
+          </strong>
+          <span className="text-gray-400">(학생들이 해당 학기를 기본으로 조회하게 됩니다)</span>
+        </div>
+      </div>
+
       {/* Filters & Search */}
       <div className="py-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Year Filter */}
+          <select
+            value={selectedYearFilter}
+            onChange={(e) => setSelectedYearFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+            className="px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 text-gray-700 font-medium"
+          >
+            <option value="all">전체 년도</option>
+            {settingAvailableYears.map((yr) => (
+              <option key={yr} value={yr}>
+                {yr}년도
+              </option>
+            ))}
+          </select>
+
           {/* Term Filter */}
           <select
             value={selectedTermFilter}
@@ -456,20 +560,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <option value="fall">가을학기</option>
             <option value="winter">겨울학기</option>
             <option value="special">특별과정</option>
-          </select>
-
-          {/* Type Filter */}
-          <select
-            value={selectedTypeFilter}
-            onChange={(e) => setSelectedTypeFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 text-gray-700 font-medium"
-          >
-            <option value="all">전체 일정 분류</option>
-            <option value="academic">학사 / 정규 수업</option>
-            <option value="exam">시험 / 성취도 평가</option>
-            <option value="holiday">공휴일 / 휴강</option>
-            <option value="activity">한국 문화체험</option>
-            <option value="admission">모집 / 접수 / 등록</option>
           </select>
 
           {/* Visibility Filter (노출 / 숨김) */}
@@ -512,8 +602,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <thead className="bg-[#f0f3f6] text-gray-700 font-bold border-b border-gray-200">
               <tr>
                 <th className="py-2.5 px-3 w-16 text-center">순서</th>
-                <th className="py-2.5 px-3 w-24">학기</th>
-                <th className="py-2.5 px-3 w-28">분류</th>
+                <th className="py-2.5 px-3 w-28">년도 / 학기</th>
                 <th className="py-2.5 px-3 w-36">일정 기간</th>
                 <th className="py-2.5 px-4">일정 명칭 및 상세 내용</th>
                 <th className="py-2.5 px-3 w-36">시간 / 장소</th>
@@ -523,14 +612,13 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <tbody className="divide-y divide-gray-100">
               {displayedSchedules.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-gray-400 text-xs">
+                  <td colSpan={6} className="py-10 text-center text-gray-400 text-xs">
                     등록된 일정이 없습니다.
                   </td>
                 </tr>
               ) : (
                 displayedSchedules.map((ev, idx) => {
                   const globalIdx = schedules.findIndex((s) => s.id === ev.id);
-                  const typeOpt = TYPE_OPTIONS.find((t) => t.value === ev.type) || TYPE_OPTIONS[0];
 
                   return (
                     <tr
@@ -552,7 +640,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                           >
                             <GripVertical className="w-3.5 h-3.5" />
                           </span>
-                          <span className="text-gray-500 text-[11px] w-5 text-center font-medium font-sans">
+                          <span className="text-gray-500 text-[11px] w-5 text-center font-medium">
                             {globalIdx + 1}
                           </span>
                           <div className="flex flex-col">
@@ -578,9 +666,12 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         </div>
                       </td>
 
-                      {/* Term */}
+                      {/* Year & Term */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="font-semibold text-gray-800 text-[11px]">
+                        <div className="font-bold text-gray-900 text-[12px]">
+                          {getScheduleYear(ev)}년
+                        </div>
+                        <span className="font-semibold text-gray-600 text-[11px]">
                           {ev.term === 'spring' && '봄학기'}
                           {ev.term === 'summer' && '여름학기'}
                           {ev.term === 'fall' && '가을학기'}
@@ -589,15 +680,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                         </span>
                       </td>
 
-                      {/* Type Badge */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${typeOpt.color}`}>
-                          {typeOpt.label}
-                        </span>
-                      </td>
-
                       {/* Date Range */}
-                      <td className="py-2.5 px-3 font-sans text-[11px] font-medium text-gray-700 whitespace-nowrap">
+                      <td className="py-2.5 px-3 text-[11px] font-medium text-gray-700 whitespace-nowrap">
                         <div>{ev.startDate}</div>
                         {ev.startDate !== ev.endDate && (
                           <div className="text-[10px] text-gray-400">~ {ev.endDate}</div>
@@ -621,9 +705,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                             </span>
                           )}
                         </div>
-                        {ev.titleEn && (
-                          <div className="text-[11px] text-gray-400 mt-0.5">{ev.titleEn}</div>
-                        )}
                         {ev.description && (
                           <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">
                             {ev.description}
@@ -719,7 +800,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
             <div className="py-4 space-y-3">
               <div className="bg-gray-50 rounded p-3 border border-gray-200">
                 <div className="font-bold text-gray-900 text-sm">{deleteTarget.title}</div>
-                <div className="font-sans text-xs text-gray-600 mt-1 font-medium">
+                <div className="text-xs text-gray-600 mt-1 font-medium">
                   기간: {deleteTarget.startDate} {deleteTarget.startDate !== deleteTarget.endDate && `~ ${deleteTarget.endDate}`}
                 </div>
                 {deleteTarget.hidden && (
@@ -750,8 +831,8 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                   </div>
                   <div className="text-[11px] text-amber-700 mt-0.5">
                     {deleteTarget.hidden
-                      ? '학생 일정표에 다시 정상적으로 노출합니다.'
-                      : '데이터를 삭제하지 않고 학생 일정표에서만 즉시 감춥니다. 언제든 다시 보이게 복원할 수 있습니다.'}
+                      ? '학생 한국어학당 일정에 다시 정상적으로 노출합니다.'
+                      : '데이터를 삭제하지 않고 학생 한국어학당 일정에서만 즉시 감춥니다. 언제든 다시 보이게 복원할 수 있습니다.'}
                   </div>
                 </div>
               </button>
@@ -840,7 +921,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                   <span>{editingEvent ? '일정 수정' : '새 일정 등록'}</span>
                 </h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  학생 포털의 연간, 월간, 주간 일정표에 반영되는 정보를 입력해 주세요.
+                  학생 포털의 연간, 월간, 주간 한국어학당 일정에 반영되는 정보를 입력해 주세요.
                 </p>
               </div>
               <button
@@ -864,50 +945,51 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                   required
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="예: 2025학년도 봄학기 개강"
+                  placeholder="예: 2026학년도 봄학기 개강"
                   className="w-full px-3 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] focus:outline-hidden"
                 />
               </div>
 
-              {/* Title EN */}
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">
-                  일정 명칭 (영어, 선택)
-                </label>
-                <input
-                  type="text"
-                  value={formTitleEn}
-                  onChange={(e) => setFormTitleEn(e.target.value)}
-                  placeholder="e.g. 2025 Spring Term Commencement"
-                  className="w-full px-3 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] focus:outline-hidden"
-                />
-              </div>
-
-              {/* Term & Type */}
+              {/* Year & Term Selection */}
               <div className="grid grid-cols-2 gap-3">
+                {/* Year (년도 구분) */}
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">해당 학기</label>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    년도 구분 <span className="text-red-500">*</span>
+                  </label>
                   <select
-                    value={formTerm}
-                    onChange={(e) => setFormTerm(e.target.value as ScheduleTerm)}
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] bg-white"
+                    value={formYear}
+                    onChange={(e) => {
+                      const yr = Number(e.target.value);
+                      setFormYear(yr);
+                      if (formStartDate) {
+                        setFormStartDate(`${yr}${formStartDate.slice(4)}`);
+                      }
+                      if (formEndDate) {
+                        setFormEndDate(`${yr}${formEndDate.slice(4)}`);
+                      }
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] bg-white font-medium cursor-pointer"
                   >
-                    {TERM_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
+                    {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}년도
                       </option>
                     ))}
                   </select>
                 </div>
 
+                {/* Term */}
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">일정 분류</label>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    해당 학기 <span className="text-red-500">*</span>
+                  </label>
                   <select
-                    value={formType}
-                    onChange={(e) => setFormType(e.target.value as ScheduleEventType)}
-                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] bg-white"
+                    value={formTerm}
+                    onChange={(e) => setFormTerm(e.target.value as ScheduleTerm)}
+                    className="w-full px-2.5 py-1.5 rounded border border-gray-300 focus:border-[#1A3B6B] bg-white font-medium cursor-pointer"
                   >
-                    {TYPE_OPTIONS.map((opt) => (
+                    {TERM_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -1011,7 +1093,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
                       학생 포털에서 숨기기 (임시 비노출)
                     </span>
                     <span className="text-[11px] text-amber-700 block mt-0.5">
-                      체크하면 학생 일정표에서 보이지 않으며, 관리자 모드에서만 확인 및 복원할 수 있습니다.
+                      체크하면 학생 한국어학당 일정에서 보이지 않으며, 관리자 모드에서만 확인 및 복원할 수 있습니다.
                     </span>
                   </label>
                 </div>

@@ -3,23 +3,15 @@ import {
   Search, 
   X, 
   ArrowRight, 
-  Sparkles, 
-  CalendarCheck, 
-  FileBadge, 
-  Building2, 
-  ScrollText, 
-  GraduationCap, 
-  HeartPulse, 
-  BookOpen, 
-  HelpCircle, 
-  Compass, 
-  Coins, 
-  Briefcase 
+  Sparkles
 } from 'lucide-react';
-import { Language, FaqCategory } from '../types';
+import { Language, FaqCategory, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText } from '../services/translator';
+import { renderCategoryIcon } from '../constants/categoryIcons';
+
+export { renderCategoryIcon };
 
 interface HeroSectionProps {
   currentLang: Language;
@@ -28,34 +20,8 @@ interface HeroSectionProps {
   selectedCategory: FaqCategory | 'all';
   setSelectedCategory: (cat: FaqCategory | 'all') => void;
   onSearchSubmit?: () => void;
+  config?: Partial<SiteConfig>;
 }
-
-export const renderCategoryIcon = (iconName: string, className = "w-3.5 h-3.5") => {
-  switch (iconName) {
-    case 'CalendarCheck':
-      return <CalendarCheck className={className} />;
-    case 'FileBadge':
-      return <FileBadge className={className} />;
-    case 'Building2':
-      return <Building2 className={className} />;
-    case 'ScrollText':
-      return <ScrollText className={className} />;
-    case 'GraduationCap':
-      return <GraduationCap className={className} />;
-    case 'HeartPulse':
-      return <HeartPulse className={className} />;
-    case 'BookOpen':
-      return <BookOpen className={className} />;
-    case 'Compass':
-      return <Compass className={className} />;
-    case 'Coins':
-      return <Coins className={className} />;
-    case 'Briefcase':
-      return <Briefcase className={className} />;
-    default:
-      return <HelpCircle className={className} />;
-  }
-};
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   currentLang,
@@ -63,9 +29,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   setSearchQuery,
   selectedCategory,
   setSelectedCategory,
+  config: propConfig,
 }) => {
   const t = translations[currentLang] || translations.ko;
-  const { config } = useTheme();
+  const themeContext = useTheme();
+  const config = { ...themeContext.config, ...(propConfig || {}) };
 
   // Dynamic categories with automatic translation
   const [catLabels, setCatLabels] = useState<Record<string, string>>({});
@@ -101,7 +69,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
       }
 
       // 3. Custom Placeholder if customized
-      if (config.searchPlaceholder && config.searchPlaceholder !== '비자 연장, 출석 기준, 기숙사 외박 등을 검색해 보세요') {
+      if (config.searchPlaceholder) {
         const tp = await translateText(config.searchPlaceholder, currentLang);
         if (isMounted) setTransPlaceholder(tp);
       }
@@ -172,6 +140,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     return <Search className={iconClass} />;
   };
 
+  const effectivePlaceholder =
+    config.searchPlaceholder !== undefined && config.searchPlaceholder.trim() !== ''
+      ? (currentLang === 'ko' ? config.searchPlaceholder : transPlaceholder || config.searchPlaceholder)
+      : t.searchPlaceholder;
+
   return (
     <div
       className={`relative border-b border-[#E2E5E8] transition-all duration-300 ${
@@ -202,8 +175,11 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={transPlaceholder || (currentLang === 'ko' ? config.searchPlaceholder || t.searchPlaceholder : t.searchPlaceholder)}
-              className="w-full py-2 sm:py-2.5 px-1.5 sm:px-2 text-base sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent min-w-0"
+              placeholder={effectivePlaceholder}
+              className="w-full py-2 sm:py-2.5 px-2 text-gray-900 placeholder:text-gray-400 focus:outline-hidden bg-transparent min-w-0 flex-1 text-base placeholder:text-base placeholder:font-normal"
+              style={{
+                fontSize: 'var(--font-scale, 1rem)',
+              }}
             />
             {searchQuery && (
               <button

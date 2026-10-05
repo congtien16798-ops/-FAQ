@@ -149,6 +149,48 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [tableHasHeader, setTableHasHeader] = useState(true);
   const [tableTheme, setTableTheme] = useState<'navy' | 'gray' | 'clean' | 'green'>('navy');
 
+  // Link insertion modal & settings
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('https://');
+  const [linkText, setLinkText] = useState('');
+  const [linkNewTab, setLinkNewTab] = useState(true);
+  const savedSelectionRange = useRef<Range | null>(null);
+
+  const openLinkModal = () => {
+    const sel = window.getSelection();
+    let selectedStr = '';
+    if (sel && sel.rangeCount > 0) {
+      savedSelectionRange.current = sel.getRangeAt(0).cloneRange();
+      selectedStr = sel.toString();
+    } else {
+      savedSelectionRange.current = null;
+    }
+    setLinkText(selectedStr);
+    setLinkUrl('https://');
+    setLinkNewTab(true);
+    setLinkModalOpen(true);
+  };
+
+  const handleInsertLink = () => {
+    if (!linkUrl.trim() || linkUrl.trim() === 'https://') {
+      alert('유효한 링크 URL을 입력해 주세요.');
+      return;
+    }
+    const finalUrl = linkUrl.trim().startsWith('http') ? linkUrl.trim() : `https://${linkUrl.trim()}`;
+    const displayText = linkText.trim() || finalUrl;
+    const targetAttr = linkNewTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+    const anchorHtml = `<a href="${finalUrl}"${targetAttr} style="color: #1A3B6B; font-weight: 600; text-decoration: underline;" class="faq-link hover:underline">${displayText}</a>`;
+
+    editorRef.current?.focus();
+    if (savedSelectionRange.current) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(savedSelectionRange.current);
+    }
+    insertCustomHtml(anchorHtml);
+    setLinkModalOpen(false);
+  };
+
   // Active / Selected Table & Cell State for inline table editing
   const [selectedCell, setSelectedCell] = useState<HTMLTableCellElement | null>(null);
   const [selectedTable, setSelectedTable] = useState<HTMLTableElement | null>(null);
@@ -1068,6 +1110,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span>표 삽입</span>
         </button>
 
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={openLinkModal}
+          className="px-2 py-0.5 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 rounded text-[11px] font-bold flex items-center gap-1 cursor-pointer border border-indigo-200"
+          title="웹 링크 삽입 (URL, 링크 텍스트, 새 탭 열기)"
+        >
+          <LinkIcon className="w-3.5 h-3.5 text-indigo-700" />
+          <span>링크 삽입</span>
+        </button>
+
         {/* IMAGE INSERT BUTTON (Highlighted feature) */}
         <button
           type="button"
@@ -1661,6 +1714,91 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 className="px-4 py-1.5 rounded text-xs bg-[#1A3B6B] hover:bg-[#122a4d] text-white font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
               >
                 본문에 사진 삽입하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LINK INSERT MODAL */}
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-md max-w-md w-full p-5 shadow-2xl border border-gray-200 animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4">
+              <h5 className="font-bold text-gray-900 text-sm flex items-center gap-1.5">
+                <LinkIcon className="w-4 h-4 text-indigo-600" />
+                <span>웹 링크 삽입 및 설정</span>
+              </h5>
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  연결할 웹 주소 (URL) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://www.kmu.ac.kr"
+                  className="w-full px-3 py-2 rounded border border-gray-300 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  표시할 링크 텍스트
+                </label>
+                <input
+                  type="text"
+                  value={linkText}
+                  onChange={(e) => setLinkText(e.target.value)}
+                  placeholder="예: 계명대학교 한국어학당 공지사항 바로가기"
+                  className="w-full px-3 py-2 rounded border border-gray-300 focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  비워둘 경우 위 웹 주소가 본문에 그대로 표시됩니다.
+                </p>
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded border border-gray-200">
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={linkNewTab}
+                    onChange={(e) => setLinkNewTab(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                  />
+                  <span>새 창(새 탭)으로 열기 (target="_blank")</span>
+                </label>
+                <p className="text-[11px] text-gray-500 mt-1 ml-6">
+                  학생이 링크를 클릭했을 때 포털 페이지를 벗어나지 않고 새로운 탭에서 열립니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5 pt-3 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(false)}
+                className="px-3 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-100 text-xs font-semibold cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertLink}
+                className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>링크 삽입</span>
               </button>
             </div>
           </div>

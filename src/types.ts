@@ -65,6 +65,7 @@ export interface ScheduleEvent {
   id: string;
   title: string;
   titleEn?: string;
+  year?: number; // 년도 구분 (예: 2025, 2026)
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   term: ScheduleTerm; // 봄학기, 여름학기, 가을학기, 겨울학기, 특별과정
@@ -79,12 +80,22 @@ export interface ScheduleEvent {
   updatedAt: string;
 }
 
+export const getScheduleYear = (event: Partial<ScheduleEvent>): number => {
+  if (event.year) return event.year;
+  if (event.startDate) {
+    const y = parseInt(event.startDate.slice(0, 4), 10);
+    if (!isNaN(y)) return y;
+  }
+  return 2026;
+};
+
 export type InquiryStatus = 'pending' | 'resolved';
 
 export interface InquiryItem {
   id: string;
   studentId: string;
   name: string;
+  phone?: string; // 연락처 (선택 사항)
   content: string;
   status: InquiryStatus;
   adminNote?: string;
@@ -115,6 +126,8 @@ export interface SiteConfig {
   logoUrl?: string;
   logoHeight: number;
   logoSymbolIcon?: 'university' | 'graduation' | 'book' | 'shield' | 'globe';
+  showLogoTitle?: boolean; // 로고 옆 메인 타이틀/배너 표시 여부 (기본: true)
+  showHeroBanner?: boolean; // 포털 메인 배너 표시 여부 (기본: true)
   // Popup Notice Features & Design
   popupEnabled?: boolean;
   popupTitle?: string;
@@ -135,6 +148,10 @@ export interface SiteConfig {
   searchButtonIconType?: 'search' | 'arrow' | 'sparkles';
   searchBarRadius?: number;
   fontSize: 'standard' | 'large';
+  fontFamily?: 'noto' | 'pretendard' | 'nanum' | 'gowun' | 'inter' | 'system';
+  fontSizeScale?: 'compact' | 'standard' | 'large' | 'xlarge';
+  fontHeadingWeight?: 'medium' | 'bold' | 'black';
+  fontLineHeight?: 'compact' | 'normal' | 'spacious';
   borderRadius: number;
   officeHours: string;
   phone: string;
@@ -147,6 +164,9 @@ export interface SiteConfig {
   // Related Foreign Student Sites
   showRelatedSites?: boolean;
   relatedSites?: RelatedSite[];
+  // Academic Calendar Settings (현재 학기 정보 설정)
+  currentAcademicYear?: number;
+  currentAcademicTerm?: ScheduleTerm;
   categories: CategoryItem[];
   // Chatbot Settings
   chatbotEnabled?: boolean;

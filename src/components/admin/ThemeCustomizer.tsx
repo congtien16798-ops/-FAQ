@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Palette, 
   Layout, 
@@ -135,13 +135,21 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
 
   // Live Preview Enhancement States (요청 8: 실시간 미리보기 보완 및 개선)
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [previewSection, setPreviewSection] = useState<'all' | 'hero' | 'faq' | 'docs' | 'schedule' | 'popup'>('all');
+  const [previewSection, setPreviewSection] = useState<'all' | 'hero' | 'faq' | 'docs' | 'schedule' | 'inquiry' | 'popup'>('all');
   const [previewLang, setPreviewLang] = useState<'ko' | 'en' | 'vi' | 'zh' | 'mn'>('ko');
   const [previewFaqExpanded, setPreviewFaqExpanded] = useState<string | null>('faq-preview-1');
   const [previewSearchText, setPreviewSearchText] = useState('');
   const [previewSelectedCategory, setPreviewSelectedCategory] = useState<string>('all');
   const [previewTab, setPreviewTab] = useState<'faq' | 'downloads' | 'inquiry' | 'schedule'>('faq');
   const [isFullScreenPreview, setIsFullScreenPreview] = useState(false);
+
+  // Activate design mode in ThemeContext on mount so draftConfig & draft CSS variables are active
+  useEffect(() => {
+    setIsDesignMode(true);
+    return () => {
+      setIsDesignMode(false);
+    };
+  }, [setIsDesignMode]);
 
   // Real datasets for authentic 1:1 Live Preview (미리보기와 메인화면 일치화)
   const effectiveFaqs: FaqItem[] = (faqs && faqs.length > 0) ? faqs : (() => {
@@ -402,13 +410,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
           <div>
             <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <span>디자인 모드 (Theme Customizer)</span>
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                실시간 분할 뷰
-              </span>
             </h2>
-            <p className="text-xs text-gray-500">
-              색상, 로고, 검색 버튼 디자인, 카테고리, 팝업 및 관련 사이트를 편집하면 우측 미리보기에 즉시 반영됩니다.
-            </p>
           </div>
         </div>
 
@@ -436,7 +438,13 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
           )}
 
           <button
-            onClick={() => setIsDesignMode(false)}
+            onClick={() => {
+              if (onExit) {
+                onExit();
+              } else {
+                setIsDesignMode(false);
+              }
+            }}
             className="px-3 py-1.5 rounded text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white border border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer"
           >
             편집 종료
@@ -449,18 +457,6 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>원복</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (window.confirm('모든 디자인을 계명대학교 초기 기본값으로 초기화하시겠습니까?')) {
-                resetToFactoryDefaults();
-              }
-            }}
-            title="출고 초기값으로 재설정"
-            className="px-2.5 py-1.5 rounded text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-          >
-            초기화
           </button>
 
           <button
@@ -574,13 +570,14 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
             </button>
             <button
               onClick={() => setActiveCategoryTab('mood')}
-              className={`py-2.5 px-3 font-semibold text-center border-b-2 transition-colors whitespace-nowrap ${
+              className={`py-2.5 px-3 font-semibold text-center border-b-2 transition-colors whitespace-nowrap flex items-center gap-1 ${
                 activeCategoryTab === 'mood'
                   ? 'border-[#1A3B6B] text-[#1A3B6B] bg-white'
                   : 'border-transparent text-gray-500 hover:text-gray-800'
               }`}
             >
-              폰트/곡률
+              <Type className="w-3.5 h-3.5 text-indigo-600" />
+              <span>폰트 세부 설정</span>
             </button>
             <button
               onClick={() => setActiveCategoryTab('chatbot')}
@@ -714,6 +711,29 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
             {/* TAB 2: Logo Design Feature */}
             {activeCategoryTab === 'logo' && (
               <div className="space-y-5">
+                {/* Logo Title Toggle */}
+                <div className="p-3 bg-gray-50 rounded-md border border-gray-200 flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-gray-900 text-xs mb-0.5">
+                      로고 옆 메인 타이틀/배너 표시 (활성 / 비활성)
+                    </div>
+                    <div className="text-[11px] text-gray-500">
+                      상단 헤더의 로고 우측에 포털 명칭(타이틀/배너 텍스트)을 노출하거나 숨깁니다.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ showLogoTitle: draftConfig.showLogoTitle === false ? true : false })}
+                    className={`px-3 py-1.5 rounded text-xs font-bold transition-colors cursor-pointer shrink-0 ${
+                      draftConfig.showLogoTitle !== false
+                        ? 'bg-[#1A3B6B] text-white shadow-2xs'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {draftConfig.showLogoTitle !== false ? '✓ 활성 (표시)' : '✕ 비활성 (숨김)'}
+                  </button>
+                </div>
+
                 <div>
                   <label className="block font-bold text-gray-800 mb-1.5">
                     로고 형태 선택 (Logo Type)
@@ -1508,7 +1528,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       공지 팝업 기능 사용
                     </span>
                     <span className="text-[11px] text-gray-500 block">
-                      유학생 접속 시 비자 연장, 학사 일정 등 주요 안내 노출
+                      유학생 접속 시 비자 연장, 한국어학당 일정 등 주요 안내 노출
                     </span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -1604,7 +1624,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     {[
                       { id: 'bell', label: '알림 종', icon: <Bell className="w-3.5 h-3.5" /> },
                       { id: 'alert', label: '주의/긴급', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-                      { id: 'calendar', label: '학사일정', icon: <Calendar className="w-3.5 h-3.5" /> },
+                      { id: 'calendar', label: '한국어학당 일정', icon: <Calendar className="w-3.5 h-3.5" /> },
                       { id: 'info', label: '일반안내', icon: <Info className="w-3.5 h-3.5" /> },
                     ].map((ic) => (
                       <button
@@ -1659,7 +1679,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       value={draftConfig.popupContent || ''}
                       onChange={(e) => updateDraft({ popupContent: e.target.value })}
                       placeholder="공지할 내용을 입력하세요..."
-                      className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white leading-relaxed font-sans"
+                      className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white leading-relaxed"
                     />
                   </div>
 
@@ -2071,43 +2091,263 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
               </div>
             )}
 
-            {/* TAB 7: Mood & Layout */}
+            {/* TAB 7: Mood & Font Detailed Settings */}
             {activeCategoryTab === 'mood' && (
-              <div className="space-y-4">
+              <div className="space-y-5">
+                {/* 1. Font Family Selection */}
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">
-                    가독성 폰트 크기
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => updateDraft({ fontSize: 'standard' })}
-                      className={`p-2.5 rounded border text-left font-medium transition-colors ${
-                        draftConfig.fontSize === 'standard'
-                          ? 'border-[#1A3B6B] bg-blue-50/50 text-[#1A3B6B]'
-                          : 'border-gray-200 bg-gray-50 text-gray-700'
-                      }`}
-                    >
-                      기본 표준 크기 (Standard)
-                    </button>
-                    <button
-                      onClick={() => updateDraft({ fontSize: 'large' })}
-                      className={`p-2.5 rounded border text-left font-medium transition-colors ${
-                        draftConfig.fontSize === 'large'
-                          ? 'border-[#1A3B6B] bg-blue-50/50 text-[#1A3B6B]'
-                          : 'border-gray-200 bg-gray-50 text-gray-700'
-                      }`}
-                    >
-                      시니어/유학생 가독성 확대 (+1px)
-                    </button>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-gray-800 text-xs flex items-center gap-1.5">
+                      <Type className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>포털 대표 글꼴 (Font Family)</span>
+                    </label>
+                    <span className="text-[11px] text-gray-500 font-medium">다국어 최적화 웹폰트</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {[
+                      {
+                        id: 'noto',
+                        name: '본고딕 (Noto Sans)',
+                        family: "'Noto Sans KR', sans-serif",
+                        desc: '정통 공식 서체 (기본값)',
+                        badge: '공식 표준',
+                      },
+                      {
+                        id: 'pretendard',
+                        name: '프리텐더드 (Pretendard)',
+                        family: "'Pretendard', sans-serif",
+                        desc: '모던 깔끔 화면 가독성',
+                        badge: '인기 서체',
+                      },
+                      {
+                        id: 'nanum',
+                        name: '나눔고딕 (Nanum Gothic)',
+                        family: "'Nanum Gothic', sans-serif",
+                        desc: '부드럽고 친근한 서체',
+                        badge: '네이버',
+                      },
+                      {
+                        id: 'gowun',
+                        name: '고운돋움 (Gowun Dodum)',
+                        family: "'Gowun Dodum', sans-serif",
+                        desc: '단정하고 따뜻한 감성',
+                        badge: '감성형',
+                      },
+                      {
+                        id: 'inter',
+                        name: '인터 (Inter)',
+                        family: "'Inter', sans-serif",
+                        desc: '영문/글로벌 인터페이스',
+                        badge: '영문 최적화',
+                      },
+                      {
+                        id: 'system',
+                        name: '시스템 기본 서체',
+                        family: '-apple-system, system-ui, sans-serif',
+                        desc: '기기 기본 내장 서체',
+                        badge: '경량 속도',
+                      },
+                    ].map((font) => {
+                      const isSelected = (draftConfig.fontFamily || 'noto') === font.id;
+                      return (
+                        <button
+                          key={font.id}
+                          type="button"
+                          onClick={() => updateDraft({ fontFamily: font.id as any })}
+                          className={`p-2.5 rounded border text-left transition-all cursor-pointer relative ${
+                            isSelected
+                              ? 'border-[#1A3B6B] bg-blue-50/70 shadow-xs ring-1 ring-[#1A3B6B]'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span
+                              className={`text-xs font-bold truncate ${
+                                isSelected ? 'text-[#1A3B6B]' : 'text-gray-900'
+                              }`}
+                              style={{ fontFamily: font.family }}
+                            >
+                              {font.name}
+                            </span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${
+                                isSelected
+                                  ? 'bg-[#1A3B6B] text-white'
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}
+                            >
+                              {font.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 line-clamp-1 leading-tight">{font.desc}</p>
+                          <div
+                            className="text-[11px] text-gray-700 mt-1 font-semibold"
+                            style={{ fontFamily: font.family }}
+                          >
+                            가나다 Aa 123
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
+                {/* 2. Font Size Scale */}
                 <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="font-bold text-gray-800 text-xs">
+                      글자 크기 배율 (Font Size Scale)
+                    </label>
+                    <span className="text-[11px] text-gray-500 font-medium">전체 포털 텍스트에 적용</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: 'compact', label: '컴팩트 (94%)', desc: '한눈에 많은 정보', fontSize: 'standard' },
+                      { id: 'standard', label: '표준 (100%)', desc: '기본 권장 크기', fontSize: 'standard' },
+                      { id: 'large', label: '확대 (106%)', desc: '유학생 가독성 향상', fontSize: 'large' },
+                      { id: 'xlarge', label: '특대형 (112%)', desc: '시원하고 큰 글씨', fontSize: 'large' },
+                    ].map((sz) => {
+                      const currentScale = draftConfig.fontSizeScale || (draftConfig.fontSize === 'large' ? 'large' : 'standard');
+                      const isSelected = currentScale === sz.id;
+                      return (
+                        <button
+                          key={sz.id}
+                          type="button"
+                          onClick={() => updateDraft({
+                            fontSizeScale: sz.id as any,
+                            fontSize: sz.fontSize as any,
+                          })}
+                          className={`p-2 rounded border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-[#1A3B6B] bg-blue-50/70 font-bold text-[#1A3B6B] shadow-xs'
+                              : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium'
+                          }`}
+                        >
+                          <div className="text-xs">{sz.label}</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">{sz.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Heading Weight & Line Height */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Heading Weight */}
+                  <div>
+                    <label className="block font-bold text-gray-800 text-xs mb-1.5">
+                      제목 굵기 (Heading Weight)
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'medium', label: '보통 (600)' },
+                        { id: 'bold', label: '굵게 (700)' },
+                        { id: 'black', label: '아주 굵게 (800)' },
+                      ].map((wt) => {
+                        const isSelected = (draftConfig.fontHeadingWeight || 'bold') === wt.id;
+                        return (
+                          <button
+                            key={wt.id}
+                            type="button"
+                            onClick={() => updateDraft({ fontHeadingWeight: wt.id as any })}
+                            className={`py-1.5 px-2 rounded border text-center text-xs transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'border-[#1A3B6B] bg-blue-50/70 font-bold text-[#1A3B6B]'
+                                : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium'
+                            }`}
+                          >
+                            {wt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Line Height */}
+                  <div>
+                    <label className="block font-bold text-gray-800 text-xs mb-1.5">
+                      본문 줄간격 (Line Height)
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'compact', label: '좁게 (1.45)' },
+                        { id: 'normal', label: '보통 (1.60)' },
+                        { id: 'spacious', label: '넓게 (1.75)' },
+                      ].map((lh) => {
+                        const isSelected = (draftConfig.fontLineHeight || 'normal') === lh.id;
+                        return (
+                          <button
+                            key={lh.id}
+                            type="button"
+                            onClick={() => updateDraft({ fontLineHeight: lh.id as any })}
+                            className={`py-1.5 px-2 rounded border text-center text-xs transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'border-[#1A3B6B] bg-blue-50/70 font-bold text-[#1A3B6B]'
+                                : 'border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium'
+                            }`}
+                          >
+                            {lh.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Live Font Preview Box */}
+                <div className="p-3.5 bg-gray-50 rounded-md border border-gray-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold text-gray-700">실시간 폰트 렌더링 미리보기</span>
+                    <span className="text-[10px] text-gray-400">적용 서체: {draftConfig.fontFamily || 'noto'}</span>
+                  </div>
+                  <div
+                    className="p-3 bg-white rounded border border-gray-200 space-y-1.5"
+                    style={{
+                      fontFamily:
+                        draftConfig.fontFamily === 'pretendard'
+                          ? "'Pretendard', sans-serif"
+                          : draftConfig.fontFamily === 'nanum'
+                          ? "'Nanum Gothic', sans-serif"
+                          : draftConfig.fontFamily === 'gowun'
+                          ? "'Gowun Dodum', sans-serif"
+                          : draftConfig.fontFamily === 'inter'
+                          ? "'Inter', sans-serif"
+                          : draftConfig.fontFamily === 'system'
+                          ? '-apple-system, system-ui, sans-serif'
+                          : "'Noto Sans KR', sans-serif",
+                    }}
+                  >
+                    <div
+                      className="text-gray-900"
+                      style={{
+                        fontWeight: draftConfig.fontHeadingWeight === 'black' ? 800 : draftConfig.fontHeadingWeight === 'medium' ? 600 : 700,
+                        fontSize: draftConfig.fontSizeScale === 'xlarge' ? '15px' : draftConfig.fontSizeScale === 'large' ? '14px' : '13px',
+                      }}
+                    >
+                      계명대학교 한국어학당 유학생 안내 포털
+                    </div>
+                    <div
+                      className="text-gray-600"
+                      style={{
+                        fontSize: draftConfig.fontSizeScale === 'xlarge' ? '13px' : draftConfig.fontSizeScale === 'large' ? '12px' : '11px',
+                        lineHeight: draftConfig.fontLineHeight === 'compact' ? 1.45 : draftConfig.fontLineHeight === 'spacious' ? 1.75 : 1.6,
+                      }}
+                    >
+                      D-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청 등 주요 학사 안내 사항을 확인하세요.
+                    </div>
+                    <div className="text-[11px] text-gray-400 pt-0.5">
+                      Keimyung University Korean Language Institute • 启明大学韩国语学堂 • Viện Ngôn ngữ Hàn Quốc
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Card Border Radius */}
+                <div className="pt-2 border-t border-gray-200">
                   <div className="flex justify-between items-center mb-1">
-                    <label className="font-bold text-gray-700">
+                    <label className="font-bold text-gray-800 text-xs">
                       카드 모서리 둥글기 (Border Radius)
                     </label>
-                    <span className="text-xs font-mono text-gray-500">
+                    <span className="text-xs font-mono font-bold text-[#1A3B6B]">
                       {draftConfig.borderRadius}px
                     </span>
                   </div>
@@ -2120,16 +2360,16 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     onChange={(e) => updateDraft({ borderRadius: parseInt(e.target.value, 10) })}
                     className="w-full cursor-pointer accent-[#1A3B6B]"
                   />
-                  <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+                  <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-medium">
                     <span>직각 (0px)</span>
-                    <span>약간 둥글게 (6px)</span>
+                    <span>기본 둥글기 (6px)</span>
                     <span>부드럽게 (16px)</span>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* TAB 8: AI Chatbot */}
+            {/* TAB 8: Guide Chatbot */}
             {activeCategoryTab === 'chatbot' && (
               <div className="space-y-4">
                 <div className="p-3 rounded border border-blue-200 bg-blue-50/60 flex items-center justify-between">
@@ -2138,7 +2378,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       챗봇 활성화 상태
                     </span>
                     <span className="text-[10px] text-gray-500">
-                      학생 화면 우측 하단에 AI 챗봇 상담 버튼을 표시합니다.
+                      학생 화면 우측 하단에 유학생 안내 챗봇 상담 버튼을 표시합니다.
                     </span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -2158,7 +2398,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={draftConfig.chatbotName || '계명어학당 AI 챗봇'}
+                    value={draftConfig.chatbotName || '계명어학당 안내 챗봇'}
                     onChange={(e) => updateDraft({ chatbotName: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white"
                   />
@@ -2184,7 +2424,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     rows={3}
                     value={
                       draftConfig.chatbotWelcomeMsg ||
-                      '안녕하세요! 계명대학교 한국어학당 AI 가이드 챗봇입니다. 🎓\nD-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정실 위치 등 무엇이든 물어보세요!'
+                      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\nD-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정실 위치 등 무엇이든 물어보세요!'
                     }
                     onChange={(e) => updateDraft({ chatbotWelcomeMsg: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white leading-relaxed text-xs"
@@ -2315,12 +2555,19 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 { id: 'hero', label: '메인 배너' },
                 { id: 'faq', label: '자주 묻는 질문' },
                 { id: 'docs', label: '서식 다운로드' },
-                { id: 'schedule', label: '일정표' },
+                { id: 'schedule', label: '한국어학당 일정' },
+                { id: 'inquiry', label: '1:1 빠른 문의' },
               ].map((sec) => (
                 <button
                   key={sec.id}
                   type="button"
-                  onClick={() => setPreviewSection(sec.id as any)}
+                  onClick={() => {
+                    setPreviewSection(sec.id as any);
+                    if (sec.id === 'faq') setPreviewTab('faq');
+                    else if (sec.id === 'docs') setPreviewTab('downloads');
+                    else if (sec.id === 'schedule') setPreviewTab('schedule');
+                    else if (sec.id === 'inquiry') setPreviewTab('inquiry');
+                  }}
                   className={`px-2 py-0.5 rounded transition-colors whitespace-nowrap cursor-pointer ${
                     previewSection === sec.id
                       ? 'bg-[#1A3B6B] text-white font-bold'
@@ -2378,9 +2625,10 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     if (tab === 'faq') setPreviewSection('faq');
                     else if (tab === 'downloads') setPreviewSection('docs');
                     else if (tab === 'schedule') setPreviewSection('schedule');
-                    else if (tab === 'inquiry') setPreviewSection('all');
+                    else if (tab === 'inquiry') setPreviewSection('inquiry');
                   }
                 }}
+                config={draftConfig}
               />
 
               {/* Popup Notice Preview if selected */}
@@ -2422,6 +2670,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   setSearchQuery={setPreviewSearchText}
                   selectedCategory={previewSelectedCategory as any}
                   setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                  config={draftConfig}
                 />
               )}
 
@@ -2438,7 +2687,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     if (tab === 'faq') { setPreviewTab('faq'); setPreviewSection('faq'); }
                     else if (tab === 'downloads') { setPreviewTab('downloads'); setPreviewSection('docs'); }
                     else if (tab === 'schedule') { setPreviewTab('schedule'); setPreviewSection('schedule'); }
-                    else if (tab === 'inquiry') { setPreviewTab('inquiry'); setPreviewSection('all'); }
+                    else if (tab === 'inquiry') { setPreviewTab('inquiry'); setPreviewSection('inquiry'); }
                   }}
                 />
               ) : (
@@ -2473,14 +2722,14 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   )}
 
                   {/* 1:1 Inquiry */}
-                  {previewTab === 'inquiry' && (
-                    <InquirySection currentLang={previewLang} />
+                  {(previewSection === 'all' || previewSection === 'inquiry') && previewTab === 'inquiry' && (
+                    <InquirySection currentLang={previewLang} config={draftConfig} />
                   )}
                 </>
               )}
 
               {/* Real Footer */}
-              <Footer currentLang={previewLang} />
+              <Footer currentLang={previewLang} config={draftConfig} />
             </div>
           </div>
         </div>
@@ -2655,6 +2904,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     setPreviewTab(tab as any);
                   }
                 }}
+                config={draftConfig}
               />
 
               <HeroSection
@@ -2663,6 +2913,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 setSearchQuery={setPreviewSearchText}
                 selectedCategory={previewSelectedCategory as any}
                 setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                config={draftConfig}
               />
 
               {previewSearchText.trim() !== '' ? (
@@ -2706,12 +2957,12 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     />
                   )}
                   {previewTab === 'inquiry' && (
-                    <InquirySection currentLang={previewLang} />
+                    <InquirySection currentLang={previewLang} config={draftConfig} />
                   )}
                 </div>
               )}
 
-              <Footer currentLang={previewLang} />
+              <Footer currentLang={previewLang} config={draftConfig} />
             </div>
           </div>
         </div>

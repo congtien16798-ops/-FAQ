@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle2, AlertCircle, RefreshCw, Lock, HelpCircle, ShieldCheck, Clock, MapPin, Phone, Calendar } from 'lucide-react';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Language, InquiryItem } from '../types';
+import { Language, InquiryItem, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText } from '../services/translator';
@@ -11,11 +11,18 @@ interface InquirySectionProps {
   currentLang: Language;
   onSuccessSubmitted?: () => void;
   onNavigateSchedule?: () => void;
+  config?: Partial<SiteConfig>;
 }
 
-export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onSuccessSubmitted, onNavigateSchedule }) => {
+export const InquirySection: React.FC<InquirySectionProps> = ({
+  currentLang,
+  onSuccessSubmitted,
+  onNavigateSchedule,
+  config: propConfig,
+}) => {
   const t = translations[currentLang] || translations.ko;
-  const { config } = useTheme();
+  const themeContext = useTheme();
+  const config = { ...themeContext.config, ...(propConfig || {}) };
 
   // Config settings with defaults
   const inquiryEnabled = config.inquiryEnabled !== false;
@@ -60,7 +67,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
       config.inquiryNotice ||
       '접수된 문의는 행정실 운영시간(09:00~17:00) 내 순차적으로 확인됩니다. 비자 만료일이 촉박한 경우 행정실(동영관 101호)에 직접 방문해 주시기 바랍니다.';
     const rawStudentLabel = config.inquiryStudentIdLabel || '학번';
-    const rawStudentPlace = config.inquiryStudentIdPlaceholder || '학번 8~10자리 숫자 입력 (예: 20241234)';
+    const rawStudentPlace = config.inquiryStudentIdPlaceholder || '학번 7자리 영문 대문자+숫자 입력 (예: F014567)';
     const rawNameLabel = config.inquiryNameLabel || '성명';
     const rawNamePlace = config.inquiryNamePlaceholder || '외국인등록증 또는 여권상 영문/한글 성명';
     const rawContentLabel = config.inquiryContentLabel || '문의 내용';
@@ -177,6 +184,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
   // Form State
   const [studentId, setStudentId] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [content, setContent] = useState('');
   const [consent, setConsent] = useState(false);
   const [botAnswer, setBotAnswer] = useState('');
@@ -205,10 +213,10 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
 
-    // Student ID: 8~10 digits
-    const studentIdRegex = /^[0-9]{8,10}$/;
+    // Student ID: Exactly 7 alphanumeric characters (e.g. F014567)
+    const studentIdRegex = /^[A-Z0-9]{7}$/;
     if (!studentId.trim() || !studentIdRegex.test(studentId.trim())) {
-      errs.studentId = t.studentIdError;
+      errs.studentId = '학번은 영문 대문자 및 숫자로 구성된 7자리로 입력해야 합니다. (예: F014567)';
     }
 
     // Name: min 2 chars
@@ -250,6 +258,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
       id: newId,
       studentId: studentId.trim(),
       name: name.trim(),
+      phone: phone.trim() || undefined,
       content: content.trim(),
       status: 'pending',
       createdAt: timestamp,
@@ -277,6 +286,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
       // Clear form
       setStudentId('');
       setName('');
+      setPhone('');
       setContent('');
       setConsent(false);
       setBotAnswer('');
@@ -300,49 +310,49 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-      {/* Quick Link to Academic Calendar banner */}
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+      {/* Quick Link to Academic Calendar banner (Unified Card Header) */}
       {onNavigateSchedule && (
-        <div className="mb-5 p-3.5 bg-gradient-to-r from-blue-50 via-indigo-50/50 to-blue-50 border border-blue-200 rounded-lg flex items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-[#1A3B6B] text-white flex items-center justify-center shrink-0 shadow-2xs">
+        <div className="mb-5 p-3.5 sm:p-4 bg-white border border-[#E2E5E8] rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <span className="text-sm md:text-base font-bold shrink-0 text-[#1A3B6B] flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <h4 className="text-xs font-bold text-gray-900 truncate">
-                일정표 (연간·월간·주간)
-              </h4>
-              <p className="text-[11px] text-gray-600 truncate">
-                개강, 분반시험, 중간·기말평가, 문화체험 및 방학 일정을 한눈에 확인하세요.
-              </p>
-            </div>
+              <span>학사 일정 안내</span>
+            </span>
+            <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+            <h4 className="text-sm md:text-base font-bold text-gray-800 truncate">
+              한국어학당 연간·학기별 학사 일정 확인
+            </h4>
           </div>
           <button
             type="button"
             onClick={onNavigateSchedule}
-            className="px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
+            className="px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1 min-h-[32px]"
           >
-            <span>일정표 보기</span>
+            <span>일정 확인하기</span>
             <span>→</span>
           </button>
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-5 sm:mb-6 pb-3 sm:pb-4 border-b border-[#E2E5E8]">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-[#2E7D5B]/10 text-[#2E7D5B] mb-2">
-          <Lock className="w-3.5 h-3.5" />
-          <span>{transBadge}</span>
+      {/* Header Card (Unified with FAQ standard) */}
+      <div className="bg-white rounded-md border border-[#E2E5E8] p-4 sm:p-5 mb-5 shadow-xs">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+          <span className="text-sm md:text-base font-bold shrink-0 text-[#2E7D5B] flex items-center gap-1.5">
+            <Lock className="w-4 h-4" />
+            <span>{transBadge}</span>
+          </span>
+          <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+          <h2 className="text-sm md:text-base font-bold text-gray-900 leading-snug">
+            {transTitle}
+          </h2>
         </div>
-        <h2 className="text-xl font-bold text-[#1A3B6B]">
-          {transTitle}
-        </h2>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs sm:text-sm text-gray-500 mt-2 leading-relaxed">
           {transSubtitle}
         </p>
 
         {transNotice && (
-          <div className="mt-3 p-3 bg-blue-50/70 border border-blue-200 rounded text-xs text-blue-900 leading-relaxed flex items-start gap-2">
+          <div className="mt-3 p-3 bg-blue-50/70 border border-blue-200 rounded text-xs sm:text-sm text-blue-900 leading-relaxed flex items-start gap-2">
             <span className="shrink-0 text-sm">ℹ️</span>
             <span>{transNotice}</span>
           </div>
@@ -383,25 +393,25 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
         /* Active Form Container */
         <div className="bg-white rounded-md border border-[#E2E5E8] p-3.5 sm:p-6 shadow-xs">
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-            {/* Student ID & Name Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+            {/* Student ID, Name & Phone Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
               {/* Student ID */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   {transStudentIdLabel} <span className="text-red-500">*</span>
+                  <span className="text-[10px] text-gray-400 font-normal ml-1">(대문자+숫자 7자리)</span>
                 </label>
                 <input
                   type="text"
                   value={studentId}
-                  maxLength={10}
-                  inputMode="numeric"
+                  maxLength={7}
                   onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
                     setStudentId(val);
                     if (errors.studentId) setErrors((prev) => ({ ...prev, studentId: '' }));
                   }}
-                  placeholder={transStudentIdPlaceholder}
-                  className={`w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border transition-colors ${
+                  placeholder="예: F014567"
+                  className={`w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border transition-colors font-bold uppercase tracking-wider ${
                     errors.studentId
                       ? 'border-red-500 bg-red-50/30'
                       : 'border-gray-200 focus:border-[#1A3B6B] focus:bg-white'
@@ -436,6 +446,22 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
                   <p className="text-[11px] text-red-600 mt-1">{errors.name}</p>
                 )}
               </div>
+
+              {/* Phone / Contact (Optional) */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                  <span>연락처 (전화/메신저)</span>
+                  <span className="text-[10px] text-gray-400 font-normal">선택사항</span>
+                </label>
+                <input
+                  type="text"
+                  value={phone}
+                  maxLength={30}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="예: 010-1234-5678, 카톡 ID"
+                  className="w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border border-gray-200 focus:border-[#1A3B6B] focus:bg-white transition-colors"
+                />
+              </div>
             </div>
 
             {/* Inquiry Content */}
@@ -444,7 +470,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
                 <label className="text-xs font-semibold text-gray-700">
                   {transContentLabel} <span className="text-red-500">*</span>
                 </label>
-                <span className="text-[11px] text-gray-400 font-mono">
+                <span className="text-[11px] font-medium text-gray-400">
                   {content.length} / {maxLength}자 (최소 {minLength}자)
                 </span>
               </div>
@@ -474,7 +500,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({ currentLang, onS
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                   <div className="flex items-center gap-2 text-xs text-gray-700 flex-wrap">
                     <span className="font-semibold text-[#1A3B6B]">{t.antiBotQuestion}</span>
-                    <span className="px-2.5 py-1 bg-white font-mono font-bold text-sm rounded border border-gray-300 text-gray-800">
+                    <span className="px-2.5 py-1 bg-white font-bold text-sm rounded border border-gray-300 text-gray-800">
                       {num1} + {num2} = ?
                     </span>
                     <button

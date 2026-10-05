@@ -38,21 +38,7 @@ interface FaqManagerProps {
   setFaqs: React.Dispatch<React.SetStateAction<FaqItem[]>>;
 }
 
-const POPULAR_CATEGORY_ICONS = [
-  { id: 'GraduationCap', label: '학사/출결', icon: GraduationCap },
-  { id: 'FileText', label: '비자/행정', icon: FileText },
-  { id: 'Building2', label: '기숙사/캠퍼스', icon: Building2 },
-  { id: 'Compass', label: '유학생활', icon: Compass },
-  { id: 'CreditCard', label: '장학/등록금', icon: CreditCard },
-  { id: 'HeartHandshake', label: '상담/지원', icon: HeartHandshake },
-  { id: 'HelpCircle', label: '일반/기타', icon: HelpCircle },
-];
-
-const renderCategoryIcon = (iconName?: string) => {
-  const matched = POPULAR_CATEGORY_ICONS.find((item) => item.id === iconName);
-  const IconComp = matched ? matched.icon : HelpCircle;
-  return <IconComp className="w-4 h-4" />;
-};
+import { CATEGORY_ICON_OPTIONS, renderCategoryIcon } from '../../constants/categoryIcons';
 
 export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
   const { user } = useAuth();
@@ -1079,8 +1065,8 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
               {/* Icon Selector */}
               <div>
                 <label className="block font-bold text-gray-700 mb-1.5">카테고리 아이콘</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {POPULAR_CATEGORY_ICONS.map((item) => {
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-1 border border-gray-200 rounded-md bg-gray-50/50">
+                  {CATEGORY_ICON_OPTIONS.map((item) => {
                     const IconComponent = item.icon;
                     return (
                       <button
@@ -1090,11 +1076,11 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
                         className={`p-2 rounded border flex flex-col items-center gap-1 cursor-pointer transition-all ${
                           catIcon === item.id
                             ? 'border-[#1A3B6B] bg-blue-50 text-[#1A3B6B] font-bold ring-1 ring-[#1A3B6B]'
-                            : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                            : 'border-gray-200 hover:bg-white bg-white text-gray-600'
                         }`}
                       >
                         <IconComponent className="w-4 h-4" />
-                        <span className="text-[10px] truncate">{item.label}</span>
+                        <span className="text-[10px] truncate w-full text-center">{item.label}</span>
                       </button>
                     );
                   })}
@@ -1200,19 +1186,6 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
                   onChange={setContent}
                   placeholder="답변 내용을 자유롭게 작성하세요..."
                   minHeight="280px"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-gray-700 mb-1">
-                  참조 안내 이미지 웹 URL (선택 사항)
-                </label>
-                <input
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://... 이미지 링크 (본문 내 사진 삽입 외 별도 첨부 시)"
-                  className="w-full px-3 py-1.5 rounded border border-gray-300"
                 />
               </div>
 

@@ -4,7 +4,7 @@ import { FaqItem, Language, FaqCategory } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText, translateHtml } from '../services/translator';
-import { renderCategoryIcon } from './HeroSection';
+import { renderCategoryIcon } from '../constants/categoryIcons';
 
 interface FaqSectionProps {
   faqs: FaqItem[];
@@ -217,8 +217,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                 {cat.icon}
                 <span>{cat.label}</span>
                 <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    isSelected ? 'bg-white/20 text-white font-bold' : 'bg-gray-100 text-gray-500'
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
                   }`}
                 >
                   {count}
@@ -288,54 +288,40 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                 {/* Accordion Header */}
                 <div
                   onClick={() => toggleExpand(uniqueItemKey)}
-                  className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
+                  className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
                 >
-                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                    {/* Q Badge */}
+                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+                    {/* Pinned indicator if pinned */}
+                    {faq.pinned && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-[#D97736]/10 text-[#D97736] border border-[#D97736]/30 shrink-0">
+                        <Pin className="w-2.5 h-2.5" />
+                        <span>{t.pinned}</span>
+                      </span>
+                    )}
+
+                    {/* Category (Bold, same font size as question title) */}
                     <span
-                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 mt-0.5 ${
-                        isExpanded
-                          ? 'bg-[#1A3B6B] text-white'
-                          : 'bg-gray-100 text-gray-600'
+                      className={`text-sm md:text-base font-bold shrink-0 transition-colors ${
+                        isExpanded ? 'text-[#1A3B6B]' : 'text-gray-900'
                       }`}
                     >
-                      Q
+                      {badge.label}
                     </span>
 
-                    <div className="flex-1">
-                      {/* Chips row */}
-                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        {faq.pinned && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-[#D97736]/10 text-[#D97736] border border-[#D97736]/30">
-                            <Pin className="w-2.5 h-2.5" />
-                            <span>{t.pinned}</span>
-                          </span>
-                        )}
-                        <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-medium border ${badge.color}`}
-                        >
-                          {badge.label}
-                        </span>
-                        {faq.views && (
-                          <span className="text-[11px] text-gray-400 flex items-center gap-1 ml-auto sm:ml-0">
-                            <Eye className="w-3 h-3" />
-                            {faq.views.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
+                    {/* Semi-transparent Divider Line (반투명 구분선) */}
+                    <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
 
-                      {/* Title */}
-                      <h3
-                        className={`text-sm md:text-base font-semibold leading-snug ${
-                          isExpanded ? 'text-[#1A3B6B]' : 'text-gray-800'
-                        }`}
-                      >
-                        {titleText}
-                      </h3>
-                    </div>
+                    {/* Question Title (Bold, same font size as category, center aligned) */}
+                    <h3
+                      className={`text-sm md:text-base font-bold leading-snug flex-1 transition-colors ${
+                        isExpanded ? 'text-[#1A3B6B]' : 'text-gray-800'
+                      }`}
+                    >
+                      {titleText}
+                    </h3>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0 pt-1 text-gray-400">
+                  <div className="flex items-center gap-1 shrink-0 text-gray-400">
                     {isExpanded ? (
                       <ChevronUp className="w-5 h-5 text-[#1A3B6B]" />
                     ) : (
@@ -377,7 +363,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
                     {/* Action Bar: URL Copy & Web Share */}
                     <div className="mt-4 sm:mt-5 pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-gray-500">
-                      <span className="font-mono text-[11px]">최종 확인일: {new Date(faq.updatedAt).toLocaleDateString('ko-KR')}</span>
+                      <span className="text-[11px] font-medium text-gray-500">최종 확인일: {new Date(faq.updatedAt).toLocaleDateString('ko-KR')}</span>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
