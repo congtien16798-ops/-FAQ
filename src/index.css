@@ -118,10 +118,12 @@ button, a, input, select, textarea {
   touch-action: manipulation;
 }
 
-/* Prevent text size adjustment on orientation changes */
+/* Prevent text size adjustment on orientation changes & stabilize layout width across tabs */
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
 }
 
 /* Safe area insets for bezel-less mobile screens */

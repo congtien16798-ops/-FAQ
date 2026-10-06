@@ -311,9 +311,9 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Header (Clean layout matching FAQ & Downloads standard) */}
-      <div className="mb-6 pb-4 border-b border-[#E2E5E8]">
+      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8]">
         <h2 className="text-xl font-bold text-[#1A3B6B]">
           {transTitle}
         </h2>

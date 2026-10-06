@@ -208,9 +208,9 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
   const currentTermInfo = SEMESTER_TABS.find((t) => t.id === selectedTerm) || SEMESTER_TABS[0];
 
   return (
-    <section className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <section className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Header & Term Filters */}
-      <div className="mb-6 pb-4 border-b border-[#E2E5E8]">
+      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Left: Title & Note */}
           <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">

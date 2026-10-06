@@ -178,7 +178,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Toast Notification */}
       {copyToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1A3B6B] text-white px-4 py-3 rounded-md shadow-lg text-sm flex items-center gap-2 border border-blue-400">
@@ -188,7 +188,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       )}
 
       {/* Header & Category Tabs */}
-      <div className="mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
+      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
         <div>
           <h2 className="text-xl font-bold text-[#1A3B6B]">
             {t.navFaq}
@@ -196,7 +196,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
         </div>
 
         {/* Categories Bar Under FAQ Title */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+        <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap">
           {categories.map((cat, idx) => {
             const isSelected = selectedCategory === cat.id;
             const count =
@@ -263,7 +263,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="w-full space-y-3">
           {sortedFaqs.map((faq, index) => {
             const uniqueItemKey = faq.id && faq.id.trim() !== '' ? faq.id.trim() : `faq-card-${index}`;
             const isExpanded = expandedId === uniqueItemKey;
@@ -279,7 +279,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
               <div
                 key={`faq-item-card-${uniqueItemKey}-${index}`}
                 id={`faq-${uniqueItemKey}`}
-                className={`bg-white rounded-md border transition-all ${
+                className={`w-full bg-white rounded-md border transition-all shadow-2xs overflow-hidden ${
                   isExpanded
                     ? 'border-[#1A3B6B] shadow-xs'
                     : 'border-[#E2E5E8] hover:border-gray-300'

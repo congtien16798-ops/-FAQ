@@ -125,7 +125,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Download Alert Toast */}
       {downloadSuccessToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2E7D5B] text-white px-4 py-3 rounded-md shadow-lg text-sm flex items-center gap-2 border border-emerald-400">
@@ -135,7 +135,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
       )}
 
       {/* Header & Category Tabs (Unified with FAQ standard & image.png) */}
-      <div className="mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
+      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
         <div>
           <h2 className="text-xl font-bold text-[#1A3B6B]">
             {t.navDownloads}
@@ -143,7 +143,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
         </div>
 
         {/* Categories Bar Under Title (No white box, with count badges) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+        <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap">
           {categories.map((cat, idx) => {
             const isSelected = selectedCategory === cat;
             const count =

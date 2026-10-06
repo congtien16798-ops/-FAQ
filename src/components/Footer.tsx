@@ -49,9 +49,9 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig 
     <footer className="bg-[#1c2430] text-gray-300 text-xs border-t border-gray-700/60 mt-12 sm:mt-16 safe-bottom">
       {/* Main Footer Info */}
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-6 sm:gap-8 mb-6">
           {/* Col 1: Operating Hours & Contacts */}
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 md:col-span-4">
             <h4 className="font-bold text-gray-200 text-xs mb-2">
               {t.officeHoursTitle}
             </h4>
@@ -82,7 +82,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig 
           </div>
 
           {/* Col 2: Location */}
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-3">
             <h4 className="font-bold text-gray-200 text-xs mb-2">
               {t.locationTitle}
             </h4>
@@ -92,10 +92,10 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig 
             </div>
           </div>
 
-          {/* Col 3: SNS & Simple 3 Related Sites */}
-          <div className="space-y-4 sm:col-span-2 md:col-span-1">
+          {/* Col 3: SNS & Related Sites (관련 웹사이트를 SNS 우측으로 배치) */}
+          <div className="sm:col-span-2 md:col-span-5 flex flex-wrap sm:flex-nowrap items-start gap-6 sm:gap-7">
             {/* SNS */}
-            <div>
+            <div className="shrink-0">
               <h4 className="font-bold text-gray-200 text-xs mb-2">
                 {t.snsTitle || 'SNS'}
               </h4>
@@ -128,9 +128,9 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig 
               </div>
             </div>
 
-            {/* Dynamic Related Sites */}
+            {/* Dynamic Related Sites (SNS 우측으로 이동) */}
             {config.showRelatedSites !== false && (
-              <div>
+              <div className="flex-1 min-w-0">
                 <h4 className="font-bold text-gray-200 text-xs mb-2">
                   {t.relatedWebsites || '관련 웹사이트'}
                 </h4>
