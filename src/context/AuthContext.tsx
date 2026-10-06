@@ -28,25 +28,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const PRIMARY_ADMIN_EMAIL = 'congtien16798@gmail.com';
 const LOCAL_STORAGE_GOOGLE_USER_KEY = 'kmu_admin_google_user';
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (response: { access_token?: string; error?: string }) => void;
-            error_callback?: (err: unknown) => void;
-          }) => {
-            requestAccessToken: (overrideConfig?: { prompt?: string }) => void;
-          };
-        };
-      };
-    };
-  }
-}
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<GoogleAdminUser | null>(() => {
     try {
@@ -142,96 +123,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
 
     try {
-      const clientId =
-        firebaseConfig.oAuthClientId ||
-        '691355247972-t743slagua34c43672gn7ri807v9nih5.apps.googleusercontent.com';
-
-      // Method 1: Google Identity Services (OAuth2 Token Client)
-      // Standard Google OAuth2 endpoint, bypassing Firebase Identity Toolkit disabled state
-      if (window.google?.accounts?.oauth2) {
-        await new Promise<void>((resolve, reject) => {
-          try {
-            const tokenClient = window.google!.accounts.oauth2.initTokenClient({
-              client_id: clientId,
-              scope: 'email profile openid',
-              callback: async (tokenResponse) => {
-                if (tokenResponse.error) {
-                  reject(new Error(tokenResponse.error));
-                  return;
-                }
-                if (!tokenResponse.access_token) {
-                  reject(new Error('Google 액세스 토큰을 받지 못했습니다.'));
-                  return;
-                }
-
-                try {
-                  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: {
-                      Authorization: `Bearer ${tokenResponse.access_token}`,
-                    },
-                  });
-                  if (!res.ok) {
-                    throw new Error('Google 사용자 프로필을 불러오지 못했습니다.');
-                  }
-                  const profile = await res.json();
-                  const email = (profile.email || '').toLowerCase().trim();
-
-                  const isAuthorized = await verifyIsAdmin(email);
-                  if (isAuthorized) {
-                    const adminUser: GoogleAdminUser = {
-                      email: profile.email,
-                      name: profile.name || profile.given_name || '관리자',
-                      photoUrl: profile.picture,
-                      id: profile.sub,
-                      uid: profile.sub,
-                    };
-                    setUser(adminUser);
-                    setIsAdmin(true);
-                    localStorage.setItem(LOCAL_STORAGE_GOOGLE_USER_KEY, JSON.stringify(adminUser));
-                    setError(null);
-                    resolve();
-                  } else {
-                    const unauthMsg = `'${profile.email}' 구글 계정은 관리자로 등록되어 있지 않습니다. 관리자 권한이 있는 구글 계정(${PRIMARY_ADMIN_EMAIL})으로 로그인해 주세요.`;
-                    setError(unauthMsg);
-                    resolve();
-                  }
-                } catch (fetchErr) {
-                  reject(fetchErr);
-                }
-              },
-              error_callback: (err) => {
-                reject(err);
-              },
-            });
-
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
-          } catch (initErr) {
-            reject(initErr);
-          }
-        });
-      } else {
-        // Method 2: Firebase Auth signInWithPopup
-        const result = await signInWithPopup(auth, googleProvider);
-        if (result.user && result.user.email) {
-          const email = result.user.email.toLowerCase().trim();
-          const isAuthorized = await verifyIsAdmin(email);
-          if (isAuthorized) {
-            const adminUser: GoogleAdminUser = {
-              email: result.user.email,
-              name: result.user.displayName || '관리자',
-              photoUrl: result.user.photoURL || undefined,
-              id: result.user.uid,
-              uid: result.user.uid,
-            };
-            setUser(adminUser);
-            setIsAdmin(true);
-            localStorage.setItem(LOCAL_STORAGE_GOOGLE_USER_KEY, JSON.stringify(adminUser));
-            setError(null);
-          } else {
-            setError(
-              `'${result.user.email}' 구글 계정은 관리자로 등록되어 있지 않습니다. 관리자 권한 구글 계정(${PRIMARY_ADMIN_EMAIL})으로 로그인해 주세요.`
-            );
-          }
+      // Standard Firebase Auth signInWithPopup (Avoids origin_mismatch)
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user && result.user.email) {
+        const email = result.user.email.toLowerCase().trim();
+        const isAuthorized = await verifyIsAdmin(email);
+        if (isAuthorized) {
+          const adminUser: GoogleAdminUser = {
+            email: result.user.email,
+            name: result.user.displayName || '관리자',
+            photoUrl: result.user.photoURL || undefined,
+            id: result.user.uid,
+            uid: result.user.uid,
+          };
+          setUser(adminUser);
+          setIsAdmin(true);
+          localStorage.setItem(LOCAL_STORAGE_GOOGLE_USER_KEY, JSON.stringify(adminUser));
+          setError(null);
+        } else {
+          setError(
+            `'${result.user.email}' 구글 계정은 관리자로 등록되어 있지 않습니다. 관리자 권한 구글 계정(${PRIMARY_ADMIN_EMAIL})으로 로그인해 주세요.`
+          );
         }
       }
     } catch (err: unknown) {
@@ -244,6 +156,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setError('브라우저에서 Google 로그인 팝업이 차단되었습니다. 브라우저 주소창에서 팝업을 허용하신 후 다시 시도해 주세요.');
       } else if (code === 'auth/popup-closed-by-user' || msg.includes('popup_closed') || msg.includes('access_denied')) {
         setError('Google 로그인 창이 닫혔습니다. 로그인을 진행하려면 [Google 계정으로 관리자 로그인] 버튼을 눌러주세요.');
+      } else if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
+        setError('현재 배포 도메인이 Firebase 승인 도메인에 등록되지 않았습니다. Firebase 콘솔(Authentication > Settings > Authorized Domains)에서 배포 도메인을 추가해 주세요.');
       } else if (msg.includes('identity-toolkit') || msg.includes('identitytoolkit.googleapis.com')) {
         setError('Google Cloud 인증 서비스가 초기화 중입니다. 잠시 후 [Google 계정으로 관리자 로그인]을 다시 클릭해 주세요.');
       } else {
