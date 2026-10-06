@@ -31,11 +31,6 @@ export const InquirySettings: React.FC = () => {
     config.inquirySubtitle ||
       '한국어학당 학사 및 비자 등 궁금한 점을 남겨주시면 담당 선생님이 확인 후 신속히 연락드립니다.'
   );
-  const [badgeText, setBadgeText] = useState(config.inquiryBadgeText || '비로그인 간편 접수');
-  const [notice, setNotice] = useState(
-    config.inquiryNotice ||
-      '접수된 문의는 행정실 운영시간(09:00~17:00) 내 순차적으로 확인됩니다. 비자 만료일이 촉박한 경우 행정실(동영관 101호)에 직접 방문해 주시기 바랍니다.'
-  );
   const [studentIdLabel, setStudentIdLabel] = useState(config.inquiryStudentIdLabel || '학번');
   const [studentIdPlaceholder, setStudentIdPlaceholder] = useState(
     config.inquiryStudentIdPlaceholder || '학번 8~10자리 숫자 입력 (예: 20241234)'
@@ -43,6 +38,10 @@ export const InquirySettings: React.FC = () => {
   const [nameLabel, setNameLabel] = useState(config.inquiryNameLabel || '성명');
   const [namePlaceholder, setNamePlaceholder] = useState(
     config.inquiryNamePlaceholder || '외국인등록증 또는 여권상 영문/한글 성명'
+  );
+  const [phoneLabel, setPhoneLabel] = useState(config.inquiryPhoneLabel || '연락처 (전화/메신저)');
+  const [phonePlaceholder, setPhonePlaceholder] = useState(
+    config.inquiryPhonePlaceholder || '예: 010-1234-5678, 카톡 ID'
   );
   const [contentLabel, setContentLabel] = useState(config.inquiryContentLabel || '문의 내용');
   const [contentPlaceholder, setContentPlaceholder] = useState(
@@ -80,12 +79,12 @@ export const InquirySettings: React.FC = () => {
   const [translatedData, setTranslatedData] = useState<{
     title: string;
     subtitle: string;
-    badge: string;
-    notice: string;
     studentIdLabel: string;
     studentIdPlaceholder: string;
     nameLabel: string;
     namePlaceholder: string;
+    phoneLabel: string;
+    phonePlaceholder: string;
     contentLabel: string;
     contentPlaceholder: string;
     privacyNotice: string;
@@ -98,24 +97,24 @@ export const InquirySettings: React.FC = () => {
   // Sync state if config updates externally
   useEffect(() => {
     setEnabled(config.inquiryEnabled !== false);
-    if (config.inquiryTitle) setTitle(config.inquiryTitle);
-    if (config.inquirySubtitle) setSubtitle(config.inquirySubtitle);
-    if (config.inquiryBadgeText) setBadgeText(config.inquiryBadgeText);
-    if (config.inquiryNotice) setNotice(config.inquiryNotice);
-    if (config.inquiryStudentIdLabel) setStudentIdLabel(config.inquiryStudentIdLabel);
-    if (config.inquiryStudentIdPlaceholder) setStudentIdPlaceholder(config.inquiryStudentIdPlaceholder);
-    if (config.inquiryNameLabel) setNameLabel(config.inquiryNameLabel);
-    if (config.inquiryNamePlaceholder) setNamePlaceholder(config.inquiryNamePlaceholder);
-    if (config.inquiryContentLabel) setContentLabel(config.inquiryContentLabel);
-    if (config.inquiryContentPlaceholder) setContentPlaceholder(config.inquiryContentPlaceholder);
-    if (config.inquiryMinLength) setMinLength(config.inquiryMinLength);
-    if (config.inquiryMaxLength) setMaxLength(config.inquiryMaxLength);
+    if (config.inquiryTitle !== undefined) setTitle(config.inquiryTitle);
+    if (config.inquirySubtitle !== undefined) setSubtitle(config.inquirySubtitle);
+    if (config.inquiryStudentIdLabel !== undefined) setStudentIdLabel(config.inquiryStudentIdLabel);
+    if (config.inquiryStudentIdPlaceholder !== undefined) setStudentIdPlaceholder(config.inquiryStudentIdPlaceholder);
+    if (config.inquiryNameLabel !== undefined) setNameLabel(config.inquiryNameLabel);
+    if (config.inquiryNamePlaceholder !== undefined) setNamePlaceholder(config.inquiryNamePlaceholder);
+    if (config.inquiryPhoneLabel !== undefined) setPhoneLabel(config.inquiryPhoneLabel);
+    if (config.inquiryPhonePlaceholder !== undefined) setPhonePlaceholder(config.inquiryPhonePlaceholder);
+    if (config.inquiryContentLabel !== undefined) setContentLabel(config.inquiryContentLabel);
+    if (config.inquiryContentPlaceholder !== undefined) setContentPlaceholder(config.inquiryContentPlaceholder);
+    if (config.inquiryMinLength !== undefined) setMinLength(config.inquiryMinLength);
+    if (config.inquiryMaxLength !== undefined) setMaxLength(config.inquiryMaxLength);
     if (config.inquiryEnableQuiz !== undefined) setEnableQuiz(config.inquiryEnableQuiz);
-    if (config.inquiryPrivacyNotice) setPrivacyNotice(config.inquiryPrivacyNotice);
-    if (config.inquiryPrivacyConsentText) setPrivacyConsentText(config.inquiryPrivacyConsentText);
-    if (config.inquirySuccessTitle) setSuccessTitle(config.inquirySuccessTitle);
-    if (config.inquirySuccessDesc) setSuccessDesc(config.inquirySuccessDesc);
-    if (config.inquiryPausedNotice) setPausedNotice(config.inquiryPausedNotice);
+    if (config.inquiryPrivacyNotice !== undefined) setPrivacyNotice(config.inquiryPrivacyNotice);
+    if (config.inquiryPrivacyConsentText !== undefined) setPrivacyConsentText(config.inquiryPrivacyConsentText);
+    if (config.inquirySuccessTitle !== undefined) setSuccessTitle(config.inquirySuccessTitle);
+    if (config.inquirySuccessDesc !== undefined) setSuccessDesc(config.inquirySuccessDesc);
+    if (config.inquiryPausedNotice !== undefined) setPausedNotice(config.inquiryPausedNotice);
   }, [config]);
 
   // Load preview translations whenever previewLang changes
@@ -131,12 +130,12 @@ export const InquirySettings: React.FC = () => {
       const [
         tTitle,
         tSubtitle,
-        tBadge,
-        tNotice,
         tStudentLabel,
         tStudentPlaceholder,
         tNameLabel,
         tNamePlaceholder,
+        tPhoneLabel,
+        tPhonePlaceholder,
         tContentLabel,
         tContentPlaceholder,
         tPrivacyNotice,
@@ -147,12 +146,12 @@ export const InquirySettings: React.FC = () => {
       ] = await Promise.all([
         translateText(title, lang, 'ko'),
         translateText(subtitle, lang, 'ko'),
-        translateText(badgeText, lang, 'ko'),
-        translateText(notice, lang, 'ko'),
         translateText(studentIdLabel, lang, 'ko'),
         translateText(studentIdPlaceholder, lang, 'ko'),
         translateText(nameLabel, lang, 'ko'),
         translateText(namePlaceholder, lang, 'ko'),
+        translateText(phoneLabel, lang, 'ko'),
+        translateText(phonePlaceholder, lang, 'ko'),
         translateText(contentLabel, lang, 'ko'),
         translateText(contentPlaceholder, lang, 'ko'),
         translateText(privacyNotice, lang, 'ko'),
@@ -165,12 +164,12 @@ export const InquirySettings: React.FC = () => {
       setTranslatedData({
         title: tTitle,
         subtitle: tSubtitle,
-        badge: tBadge,
-        notice: tNotice,
         studentIdLabel: tStudentLabel,
         studentIdPlaceholder: tStudentPlaceholder,
         nameLabel: tNameLabel,
         namePlaceholder: tNamePlaceholder,
+        phoneLabel: tPhoneLabel,
+        phonePlaceholder: tPhonePlaceholder,
         contentLabel: tContentLabel,
         contentPlaceholder: tContentPlaceholder,
         privacyNotice: tPrivacyNotice,
@@ -191,14 +190,12 @@ export const InquirySettings: React.FC = () => {
     setEnabled(true);
     setTitle('1:1 빠른 문의 접수');
     setSubtitle('한국어학당 학사 및 비자 등 궁금한 점을 남겨주시면 담당 선생님이 확인 후 신속히 연락드립니다.');
-    setBadgeText('비로그인 간편 접수');
-    setNotice(
-      '접수된 문의는 행정실 운영시간(09:00~17:00) 내 순차적으로 확인됩니다. 비자 만료일이 촉박한 경우 행정실(동영관 101호)에 직접 방문해 주시기 바랍니다.'
-    );
     setStudentIdLabel('학번');
     setStudentIdPlaceholder('학번 8~10자리 숫자 입력 (예: 20241234)');
     setNameLabel('성명');
     setNamePlaceholder('외국인등록증 또는 여권상 영문/한글 성명');
+    setPhoneLabel('연락처 (전화/메신저)');
+    setPhonePlaceholder('예: 010-1234-5678, 카톡 ID');
     setContentLabel('문의 내용');
     setContentPlaceholder('비자 연장, 출결, 기숙사, 서류 등 궁금하신 사항을 자세히 적어주세요.');
     setMinLength(10);
@@ -222,12 +219,14 @@ export const InquirySettings: React.FC = () => {
         inquiryEnabled: enabled,
         inquiryTitle: title.trim(),
         inquirySubtitle: subtitle.trim(),
-        inquiryBadgeText: badgeText.trim(),
-        inquiryNotice: notice.trim(),
+        inquiryBadgeText: '',
+        inquiryNotice: '',
         inquiryStudentIdLabel: studentIdLabel.trim(),
         inquiryStudentIdPlaceholder: studentIdPlaceholder.trim(),
         inquiryNameLabel: nameLabel.trim(),
         inquiryNamePlaceholder: namePlaceholder.trim(),
+        inquiryPhoneLabel: phoneLabel.trim(),
+        inquiryPhonePlaceholder: phonePlaceholder.trim(),
         inquiryContentLabel: contentLabel.trim(),
         inquiryContentPlaceholder: contentPlaceholder.trim(),
         inquiryMinLength: minLength,
@@ -341,35 +340,20 @@ export const InquirySettings: React.FC = () => {
           <div className="space-y-3.5 p-4 rounded-lg border border-gray-200 bg-white">
             <h5 className="font-bold text-xs text-gray-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
               <Type className="w-4 h-4 text-[#2E7D5B]" />
-              <span>페이지 제목 및 상단 안내문 설정</span>
+              <span>페이지 제목 및 안내문 설정</span>
             </h5>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  문의 폼 제목*
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="예: 1:1 빠른 문의 접수"
-                  className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  상단 배지 텍스트
-                </label>
-                <input
-                  type="text"
-                  value={badgeText}
-                  onChange={(e) => setBadgeText(e.target.value)}
-                  placeholder="예: 비로그인 간편 접수"
-                  className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
-                />
-              </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                문의 폼 제목*
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예: 1:1 빠른 문의 접수"
+                className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
+              />
             </div>
 
             <div>
@@ -382,19 +366,6 @@ export const InquirySettings: React.FC = () => {
                 onChange={(e) => setSubtitle(e.target.value)}
                 placeholder="예: 한국어학당 학사 및 비자 등 궁금한 점을 남겨주시면..."
                 className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                운영시간 및 긴급 방문 안내문 (폼 상단 박스)
-              </label>
-              <textarea
-                rows={2}
-                value={notice}
-                onChange={(e) => setNotice(e.target.value)}
-                placeholder="예: 접수된 문의는 행정실 운영시간(09:00~17:00) 내 순차적으로 확인됩니다..."
-                className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B] leading-relaxed"
               />
             </div>
           </div>
@@ -459,6 +430,35 @@ export const InquirySettings: React.FC = () => {
                   value={namePlaceholder}
                   onChange={(e) => setNamePlaceholder(e.target.value)}
                   placeholder="예: 외국인등록증 또는 여권상 영문/한글 성명"
+                  className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
+                />
+              </div>
+            </div>
+
+            {/* Phone / Contact field */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  연락처 입력 라벨
+                </label>
+                <input
+                  type="text"
+                  value={phoneLabel}
+                  onChange={(e) => setPhoneLabel(e.target.value)}
+                  placeholder="예: 연락처 (전화/메신저)"
+                  className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  연락처 Placeholder
+                </label>
+                <input
+                  type="text"
+                  value={phonePlaceholder}
+                  onChange={(e) => setPhonePlaceholder(e.target.value)}
+                  placeholder="예: 010-1234-5678, 카톡 ID"
                   className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#2E7D5B]"
                 />
               </div>
@@ -675,14 +675,14 @@ export const InquirySettings: React.FC = () => {
           {/* LIVE FORM MOCKUP (STUDENT VIEW) */}
           {(() => {
             const isKo = previewLang === 'ko';
-            const displayBadge = isKo ? badgeText : (translatedData?.badge || badgeText);
             const displayTitle = isKo ? title : (translatedData?.title || title);
             const displaySubtitle = isKo ? subtitle : (translatedData?.subtitle || subtitle);
-            const displayNotice = isKo ? notice : (translatedData?.notice || notice);
             const displayStudentIdLabel = isKo ? studentIdLabel : (translatedData?.studentIdLabel || studentIdLabel);
             const displayStudentIdPlaceholder = isKo ? studentIdPlaceholder : (translatedData?.studentIdPlaceholder || studentIdPlaceholder);
             const displayNameLabel = isKo ? nameLabel : (translatedData?.nameLabel || nameLabel);
             const displayNamePlaceholder = isKo ? namePlaceholder : (translatedData?.namePlaceholder || namePlaceholder);
+            const displayPhoneLabel = isKo ? phoneLabel : (translatedData?.phoneLabel || phoneLabel);
+            const displayPhonePlaceholder = isKo ? phonePlaceholder : (translatedData?.phonePlaceholder || phonePlaceholder);
             const displayContentLabel = isKo ? contentLabel : (translatedData?.contentLabel || contentLabel);
             const displayContentPlaceholder = isKo ? contentPlaceholder : (translatedData?.contentPlaceholder || contentPlaceholder);
             const displayPrivacyNotice = isKo ? privacyNotice : (translatedData?.privacyNotice || privacyNotice);
@@ -752,22 +752,12 @@ export const InquirySettings: React.FC = () => {
                     <>
                       {/* Header inside mockup */}
                       <div className="pb-3 border-b border-gray-200">
-                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#2E7D5B]/10 text-[#2E7D5B] mb-1.5">
-                          <Lock className="w-3 h-3" />
-                          <span>{displayBadge}</span>
-                        </div>
                         <h4 className="text-sm font-bold text-[#1A3B6B]">
                           {displayTitle}
                         </h4>
                         <p className="text-[11px] text-gray-500 mt-0.5">
                           {displaySubtitle}
                         </p>
-
-                        {displayNotice && (
-                          <div className="mt-2.5 p-2 bg-blue-50 border border-blue-200 rounded text-[10px] text-blue-900 leading-relaxed">
-                            ℹ️ {displayNotice}
-                          </div>
-                        )}
                       </div>
 
                       {/* Form fields mockup */}
@@ -779,7 +769,7 @@ export const InquirySettings: React.FC = () => {
                           </div>
                         ) : (
                           <>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                               <div>
                                 <span className="block text-[10px] font-semibold text-gray-600 mb-1">
                                   {displayStudentIdLabel} *
@@ -794,6 +784,14 @@ export const InquirySettings: React.FC = () => {
                                 </span>
                                 <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
                                   {displayNamePlaceholder}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] font-semibold text-gray-600 mb-1">
+                                  {displayPhoneLabel} (선택)
+                                </span>
+                                <div className="px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-[11px] text-gray-400 truncate">
+                                  {displayPhonePlaceholder}
                                 </div>
                               </div>
                             </div>

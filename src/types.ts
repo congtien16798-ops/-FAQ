@@ -187,6 +187,8 @@ export interface SiteConfig {
   inquiryStudentIdPlaceholder?: string;
   inquiryNameLabel?: string;
   inquiryNamePlaceholder?: string;
+  inquiryPhoneLabel?: string;
+  inquiryPhonePlaceholder?: string;
   inquiryContentLabel?: string;
   inquiryContentPlaceholder?: string;
   inquiryMinLength?: number;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Send, CheckCircle2, AlertCircle, RefreshCw, Lock, HelpCircle, ShieldCheck, Clock, MapPin, Phone, Calendar } from 'lucide-react';
+import { Send, CheckCircle2, AlertCircle, RefreshCw, Clock, MapPin, Phone } from 'lucide-react';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { Language, InquiryItem, SiteConfig } from '../types';
@@ -33,19 +33,23 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
   // Dynamic Translations state
   const [transTitle, setTransTitle] = useState(config.inquiryTitle || t.inquiryTitle);
   const [transSubtitle, setTransSubtitle] = useState(config.inquirySubtitle || t.inquirySub);
-  const [transBadge, setTransBadge] = useState(config.inquiryBadgeText || '비로그인 간편 접수');
-  const [transNotice, setTransNotice] = useState(config.inquiryNotice || '');
-  const [transStudentIdLabel, setTransStudentIdLabel] = useState(config.inquiryStudentIdLabel || t.studentIdLabel);
+  const [transStudentIdLabel, setTransStudentIdLabel] = useState(config.inquiryStudentIdLabel || '학번');
   const [transStudentIdPlaceholder, setTransStudentIdPlaceholder] = useState(
-    config.inquiryStudentIdPlaceholder || t.studentIdPlaceholder
+    config.inquiryStudentIdPlaceholder || '학번 8~10자리 숫자 입력 (예: 20241234)'
   );
-  const [transNameLabel, setTransNameLabel] = useState(config.inquiryNameLabel || t.nameLabel);
+  const [transNameLabel, setTransNameLabel] = useState(config.inquiryNameLabel || '성명');
   const [transNamePlaceholder, setTransNamePlaceholder] = useState(
-    config.inquiryNamePlaceholder || t.namePlaceholder
+    config.inquiryNamePlaceholder || '외국인등록증 또는 여권상 영문/한글 성명'
   );
-  const [transContentLabel, setTransContentLabel] = useState(config.inquiryContentLabel || t.contentLabel);
+  const [transPhoneLabel, setTransPhoneLabel] = useState(
+    config.inquiryPhoneLabel || '연락처 (전화/메신저)'
+  );
+  const [transPhonePlaceholder, setTransPhonePlaceholder] = useState(
+    config.inquiryPhonePlaceholder || '예: 010-1234-5678, 카톡 ID'
+  );
+  const [transContentLabel, setTransContentLabel] = useState(config.inquiryContentLabel || '문의 내용');
   const [transContentPlaceholder, setTransContentPlaceholder] = useState(
-    config.inquiryContentPlaceholder || t.contentPlaceholder
+    config.inquiryContentPlaceholder || '비자 연장, 출결, 기숙사, 서류 등 궁금하신 사항을 자세히 적어주세요.'
   );
   const [transPrivacyNotice, setTransPrivacyNotice] = useState(config.inquiryPrivacyNotice || t.privacyNotice);
   const [transPrivacyConsent, setTransPrivacyConsent] = useState(config.inquiryPrivacyConsentText || t.privacyConsent);
@@ -62,14 +66,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
     const rawSubtitle =
       config.inquirySubtitle ||
       '한국어학당 학사 및 비자 등 궁금한 점을 남겨주시면 담당 선생님이 확인 후 신속히 연락드립니다.';
-    const rawBadge = config.inquiryBadgeText || '비로그인 간편 접수';
-    const rawNotice =
-      config.inquiryNotice ||
-      '접수된 문의는 행정실 운영시간(09:00~17:00) 내 순차적으로 확인됩니다. 비자 만료일이 촉박한 경우 행정실(동영관 101호)에 직접 방문해 주시기 바랍니다.';
     const rawStudentLabel = config.inquiryStudentIdLabel || '학번';
-    const rawStudentPlace = config.inquiryStudentIdPlaceholder || '학번 7자리 영문 대문자+숫자 입력 (예: F014567)';
+    const rawStudentPlace = config.inquiryStudentIdPlaceholder || '학번 8~10자리 숫자 입력 (예: 20241234)';
     const rawNameLabel = config.inquiryNameLabel || '성명';
     const rawNamePlace = config.inquiryNamePlaceholder || '외국인등록증 또는 여권상 영문/한글 성명';
+    const rawPhoneLabel = config.inquiryPhoneLabel || '연락처 (전화/메신저)';
+    const rawPhonePlace = config.inquiryPhonePlaceholder || '예: 010-1234-5678, 카톡 ID';
     const rawContentLabel = config.inquiryContentLabel || '문의 내용';
     const rawContentPlace =
       config.inquiryContentPlaceholder || '비자 연장, 출결, 기숙사, 서류 등 궁금하신 사항을 자세히 적어주세요.';
@@ -88,12 +90,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
     if (currentLang === 'ko') {
       setTransTitle(rawTitle);
       setTransSubtitle(rawSubtitle);
-      setTransBadge(rawBadge);
-      setTransNotice(rawNotice);
       setTransStudentIdLabel(rawStudentLabel);
       setTransStudentIdPlaceholder(rawStudentPlace);
       setTransNameLabel(rawNameLabel);
       setTransNamePlaceholder(rawNamePlace);
+      setTransPhoneLabel(rawPhoneLabel);
+      setTransPhonePlaceholder(rawPhonePlace);
       setTransContentLabel(rawContentLabel);
       setTransContentPlaceholder(rawContentPlace);
       setTransPrivacyNotice(rawPrivacyNotice);
@@ -108,12 +110,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
     Promise.all([
       translateText(rawTitle, currentLang, 'ko'),
       translateText(rawSubtitle, currentLang, 'ko'),
-      translateText(rawBadge, currentLang, 'ko'),
-      translateText(rawNotice, currentLang, 'ko'),
       translateText(rawStudentLabel, currentLang, 'ko'),
       translateText(rawStudentPlace, currentLang, 'ko'),
       translateText(rawNameLabel, currentLang, 'ko'),
       translateText(rawNamePlace, currentLang, 'ko'),
+      translateText(rawPhoneLabel, currentLang, 'ko'),
+      translateText(rawPhonePlace, currentLang, 'ko'),
       translateText(rawContentLabel, currentLang, 'ko'),
       translateText(rawContentPlace, currentLang, 'ko'),
       translateText(rawPrivacyNotice, currentLang, 'ko'),
@@ -125,12 +127,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
       ([
         tTitle,
         tSubtitle,
-        tBadge,
-        tNotice,
         tStdLabel,
         tStdPlace,
         tNmLabel,
         tNmPlace,
+        tPhLabel,
+        tPhPlace,
         tCtLabel,
         tCtPlace,
         tPrivNotice,
@@ -142,12 +144,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
         if (isMounted) {
           setTransTitle(tTitle);
           setTransSubtitle(tSubtitle);
-          setTransBadge(tBadge);
-          setTransNotice(tNotice);
           setTransStudentIdLabel(tStdLabel);
           setTransStudentIdPlaceholder(tStdPlace);
           setTransNameLabel(tNmLabel);
           setTransNamePlaceholder(tNmPlace);
+          setTransPhoneLabel(tPhLabel);
+          setTransPhonePlaceholder(tPhPlace);
           setTransContentLabel(tCtLabel);
           setTransContentPlaceholder(tCtPlace);
           setTransPrivacyNotice(tPrivNotice);
@@ -166,12 +168,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
     currentLang,
     config.inquiryTitle,
     config.inquirySubtitle,
-    config.inquiryBadgeText,
-    config.inquiryNotice,
     config.inquiryStudentIdLabel,
     config.inquiryStudentIdPlaceholder,
     config.inquiryNameLabel,
     config.inquiryNamePlaceholder,
+    config.inquiryPhoneLabel,
+    config.inquiryPhonePlaceholder,
     config.inquiryContentLabel,
     config.inquiryContentPlaceholder,
     config.inquiryPrivacyNotice,
@@ -213,10 +215,9 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
 
-    // Student ID: Exactly 7 alphanumeric characters (e.g. F014567)
-    const studentIdRegex = /^[A-Z0-9]{7}$/;
-    if (!studentId.trim() || !studentIdRegex.test(studentId.trim())) {
-      errs.studentId = '학번은 영문 대문자 및 숫자로 구성된 7자리로 입력해야 합니다. (예: F014567)';
+    // Student ID: At least 2 characters
+    if (!studentId.trim() || studentId.trim().length < 2) {
+      errs.studentId = `${transStudentIdLabel}을(를) 입력해 주세요.`;
     }
 
     // Name: min 2 chars
@@ -311,51 +312,15 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-      {/* Quick Link to Academic Calendar banner (Unified Card Header) */}
-      {onNavigateSchedule && (
-        <div className="mb-5 p-3.5 sm:p-4 bg-white border border-[#E2E5E8] rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-            <span className="text-sm md:text-base font-bold shrink-0 text-[#1A3B6B] flex items-center gap-1.5">
-              <Calendar className="w-4 h-4" />
-              <span>학사 일정 안내</span>
-            </span>
-            <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
-            <h4 className="text-sm md:text-base font-bold text-gray-800 truncate">
-              한국어학당 연간·학기별 학사 일정 확인
-            </h4>
-          </div>
-          <button
-            type="button"
-            onClick={onNavigateSchedule}
-            className="px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-2xs flex items-center justify-center gap-1 min-h-[32px]"
-          >
-            <span>일정 확인하기</span>
-            <span>→</span>
-          </button>
-        </div>
-      )}
-
-      {/* Header Card (Unified with FAQ standard) */}
-      <div className="bg-white rounded-md border border-[#E2E5E8] p-4 sm:p-5 mb-5 shadow-xs">
-        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-          <span className="text-sm md:text-base font-bold shrink-0 text-[#2E7D5B] flex items-center gap-1.5">
-            <Lock className="w-4 h-4" />
-            <span>{transBadge}</span>
-          </span>
-          <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
-          <h2 className="text-sm md:text-base font-bold text-gray-900 leading-snug">
-            {transTitle}
-          </h2>
-        </div>
-        <p className="text-xs sm:text-sm text-gray-500 mt-2 leading-relaxed">
-          {transSubtitle}
-        </p>
-
-        {transNotice && (
-          <div className="mt-3 p-3 bg-blue-50/70 border border-blue-200 rounded text-xs sm:text-sm text-blue-900 leading-relaxed flex items-start gap-2">
-            <span className="shrink-0 text-sm">ℹ️</span>
-            <span>{transNotice}</span>
-          </div>
+      {/* Header (Clean layout matching FAQ & Downloads standard) */}
+      <div className="mb-6 pb-4 border-b border-[#E2E5E8]">
+        <h2 className="text-xl font-bold text-[#1A3B6B]">
+          {transTitle}
+        </h2>
+        {transSubtitle && (
+          <p className="text-xs sm:text-sm text-gray-500 mt-1.5 leading-relaxed">
+            {transSubtitle}
+          </p>
         )}
       </div>
 
@@ -399,19 +364,18 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
                   {transStudentIdLabel} <span className="text-red-500">*</span>
-                  <span className="text-[10px] text-gray-400 font-normal ml-1">(대문자+숫자 7자리)</span>
                 </label>
                 <input
                   type="text"
                   value={studentId}
-                  maxLength={7}
+                  maxLength={30}
                   onChange={(e) => {
-                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+                    const val = e.target.value.trim().slice(0, 30);
                     setStudentId(val);
                     if (errors.studentId) setErrors((prev) => ({ ...prev, studentId: '' }));
                   }}
-                  placeholder="예: F014567"
-                  className={`w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border transition-colors font-bold uppercase tracking-wider ${
+                  placeholder={transStudentIdPlaceholder}
+                  className={`w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border transition-colors ${
                     errors.studentId
                       ? 'border-red-500 bg-red-50/30'
                       : 'border-gray-200 focus:border-[#1A3B6B] focus:bg-white'
@@ -450,7 +414,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
               {/* Phone / Contact (Optional) */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
-                  <span>연락처 (전화/메신저)</span>
+                  <span>{transPhoneLabel}</span>
                   <span className="text-[10px] text-gray-400 font-normal">선택사항</span>
                 </label>
                 <input
@@ -458,7 +422,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
                   value={phone}
                   maxLength={30}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="예: 010-1234-5678, 카톡 ID"
+                  placeholder={transPhonePlaceholder}
                   className="w-full px-3 py-2 sm:py-2 text-base sm:text-xs rounded border border-gray-200 focus:border-[#1A3B6B] focus:bg-white transition-colors"
                 />
               </div>

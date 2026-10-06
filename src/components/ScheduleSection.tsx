@@ -3,9 +3,8 @@ import {
   Calendar as CalendarIcon,
   Clock,
   MapPin,
-  Search,
-  X,
-  ChevronDown
+  ChevronDown,
+  X
 } from 'lucide-react';
 import { ScheduleEvent, ScheduleTerm, Language, getScheduleYear } from '../types';
 import { translations } from '../constants/translations';
@@ -80,7 +79,6 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
   );
   const [hasUserManuallySelected, setHasUserManuallySelected] = useState<boolean>(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
 
   // Automatically update initial filter values when admin configuration loads or changes
@@ -154,21 +152,6 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
         const evYear = getScheduleYear(item);
         if (evYear !== selectedYear) return false;
         if (item.term !== selectedTerm) return false;
-
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const trans = translatedMap[item.id];
-          const matchTitle =
-            (item.title || '').toLowerCase().includes(q) ||
-            (trans?.title || '').toLowerCase().includes(q) ||
-            (item.titleEn || '').toLowerCase().includes(q);
-          const matchDesc =
-            (item.description || '').toLowerCase().includes(q) ||
-            (trans?.desc || '').toLowerCase().includes(q);
-          const matchLoc = (item.location || '').toLowerCase().includes(q);
-          if (!matchTitle && !matchDesc && !matchLoc) return false;
-        }
-
         return true;
       })
       .sort((a, b) => {
@@ -177,7 +160,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
         }
         return a.startDate.localeCompare(b.startDate);
       });
-  }, [schedules, selectedYear, selectedTerm, searchQuery, translatedMap]);
+  }, [schedules, selectedYear, selectedTerm]);
 
   // Helper getters
   const getEventTitle = (ev: ScheduleEvent) => {
@@ -226,20 +209,21 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
 
   return (
     <section className="max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-      {/* Top Filter Controls */}
-      <div className="bg-white rounded-md border border-[#E2E5E8] p-3 sm:p-4 mb-6 shadow-xs">
-        <div className="pb-3 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
-            {t.scheduleTitle || '한국어학당 일정'}
-          </h2>
-          <p className="text-xs text-gray-500">
-            * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
-          </p>
-        </div>
+      {/* Header & Term Filters */}
+      <div className="mb-6 pb-4 border-b border-[#E2E5E8]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Left: Title & Note */}
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+            <h2 className="text-xl font-bold text-[#1A3B6B] shrink-0">
+              {t.scheduleTitle || '한국어학당 일정'}
+            </h2>
+            <span className="text-xs text-gray-400 hidden md:inline">
+              * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
+            </span>
+          </div>
 
-        {/* Dropdown Filters (년도 및 학기 선택) & Keyword Search */}
-        <div className="pt-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          {/* Right: Year & Term Dropdown Filters */}
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap shrink-0">
             {/* Year Dropdown */}
             <div className="relative">
               <select
@@ -249,7 +233,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   setSelectedYear(Number(e.target.value));
                   setHasUserManuallySelected(true);
                 }}
-                className="appearance-none pl-3 pr-8 py-2 bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 focus:border-[#1A3B6B] rounded-md text-xs font-bold text-gray-900 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
+                className="appearance-none pl-3 pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
               >
                 {availableYears.map((yr) => (
                   <option key={yr} value={yr}>
@@ -269,38 +253,23 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   setSelectedTerm(e.target.value as ScheduleTerm);
                   setHasUserManuallySelected(true);
                 }}
-                className="appearance-none pl-3 pr-8 py-2 bg-gray-50 hover:bg-white focus:bg-white border border-gray-300 focus:border-[#1A3B6B] rounded-md text-xs font-bold text-gray-900 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
+                className="appearance-none pl-3 pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
               >
                 {SEMESTER_TABS.map((sem) => (
                   <option key={sem.id} value={sem.id}>
-                    {getSemesterLabel(sem)} ({sem.months})
+                    {getSemesterLabel(sem)}
                   </option>
                 ))}
               </select>
               <ChevronDown className="w-3.5 h-3.5 text-gray-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           </div>
-
-          {/* Keyword Search */}
-          <div className="relative w-full md:w-64">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="일정명, 장소, 내용 검색..."
-              className="w-full pl-8 pr-7 py-2 rounded-md border border-gray-300 text-xs bg-gray-50 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
         </div>
+
+        {/* Small Screen Note */}
+        <p className="text-xs text-gray-400 mt-2 md:hidden">
+          * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
+        </p>
       </div>
 
       {/* SCHEDULE EVENTS LIST */}

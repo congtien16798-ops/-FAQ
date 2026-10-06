@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, Search, Filter, AlertCircle, FileCheck, CheckCircle2, Globe, Sparkles } from 'lucide-react';
+import { FileText, Download, Filter, AlertCircle, FileCheck, CheckCircle2, Globe, Sparkles } from 'lucide-react';
 import { DocumentItem, Language } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
+import { renderCategoryIcon } from '../constants/categoryIcons';
 
 interface DownloadsSectionProps {
   documents: DocumentItem[];
@@ -22,7 +23,6 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
 
-  const [search, setSearch] = useState('');
   const [internalCategory, setInternalCategory] = useState<string>('all');
   const selectedCategory = propCategory !== undefined ? propCategory : internalCategory;
   const setSelectedCategory = propSetCategory || setInternalCategory;
@@ -79,16 +79,29 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   const filteredDocs = (documents || []).filter((doc) => {
     if (!doc || doc.hidden) return false;
     const matchesCat = selectedCategory === 'all' || doc.category === selectedCategory;
-    if (!matchesCat) return false;
-    const q = (search || '').trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (doc.title?.toLowerCase() || '').includes(q) ||
-      (doc.description?.toLowerCase() || '').includes(q) ||
-      (doc.fileName?.toLowerCase() || '').includes(q) ||
-      (doc.category?.toLowerCase() || '').includes(q)
-    );
+    return matchesCat;
   });
+
+  const getCategoryIcon = (catId: string) => {
+    if (catId === 'all') return null;
+    const found = (config.categories || []).find(
+      (c) => c.id === catId || c.name.ko === catId || (c.name as any)[currentLang] === catId
+    );
+    if (found?.icon) return renderCategoryIcon(found.icon);
+    return null;
+  };
+
+  const getCategoryLabel = (cat: string) => {
+    if (cat === 'all') return t.categoryAll;
+    const found = (config.categories || []).find((c) => c.id === cat || c.name.ko === cat);
+    if (found?.name) {
+      if (currentLang !== 'ko' && !showOriginal && found.name[currentLang]) {
+        return found.name[currentLang]!;
+      }
+      return found.name.ko || cat;
+    }
+    return cat;
+  };
 
   const getFormatBadge = (fileType?: string) => {
     switch ((fileType || '').toLowerCase()) {
@@ -121,11 +134,47 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-5 sm:mb-6 pb-3 border-b border-[#E2E5E8]">
-        <h2 className="text-xl font-bold text-[#1A3B6B]">
-          {t.navDownloads}
-        </h2>
+      {/* Header & Category Tabs (Unified with FAQ standard & image.png) */}
+      <div className="mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
+        <div>
+          <h2 className="text-xl font-bold text-[#1A3B6B]">
+            {t.navDownloads}
+          </h2>
+        </div>
+
+        {/* Categories Bar Under Title (No white box, with count badges) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0">
+          {categories.map((cat, idx) => {
+            const isSelected = selectedCategory === cat;
+            const count =
+              cat === 'all'
+                ? (documents || []).filter((d) => d && !d.hidden).length
+                : (documents || []).filter((d) => d && !d.hidden && d.category === cat).length;
+            const icon = getCategoryIcon(cat);
+
+            return (
+              <button
+                key={`doc-filter-cat-${cat}-${idx}`}
+                onClick={() => setSelectedCategory(cat)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                  isSelected
+                    ? 'bg-[#1A3B6B] text-white border-[#1A3B6B] shadow-xs'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                {icon}
+                <span>{getCategoryLabel(cat)}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Multi-language Auto-Translation Info Bar */}
@@ -145,47 +194,6 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
           </button>
         </div>
       )}
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-md border border-[#E2E5E8] p-3 mb-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Category Filter Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar touch-scroll sm:flex-wrap -mx-3 px-3 sm:mx-0 sm:px-0 pb-1 sm:pb-0">
-          {categories.map((cat, idx) => (
-            <button
-              key={`doc-filter-cat-${cat}-${idx}`}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors whitespace-nowrap shrink-0 cursor-pointer min-h-[32px] flex items-center ${
-                selectedCategory === cat
-                  ? 'bg-[#1A3B6B] text-white border-[#1A3B6B]'
-                  : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              {cat === 'all' ? t.categoryAll : cat}
-            </button>
-          ))}
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full sm:w-64 shrink-0">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="서식 명칭 검색..."
-            className="w-full pl-8 pr-3 py-2 sm:py-1.5 text-base sm:text-xs bg-gray-50 rounded border border-gray-200 focus:outline-none focus:bg-white focus:border-[#1A3B6B]"
-          />
-          <Search className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-gray-400 absolute left-2.5 top-3 sm:top-2.5" />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-2 sm:top-1.5 text-gray-400 hover:text-gray-600 p-1"
-              aria-label="검색어 지우기"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </div>
 
       {/* Downloads List Cards (Unified with FAQ standard) */}
       <div className="space-y-3">
