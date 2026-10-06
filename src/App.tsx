@@ -37,65 +37,70 @@ function MainApp() {
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
-  // FAQs State
+  // Helper to detect hardcoded mock/sample IDs that should not appear
+  const isMockItem = (id?: string) => {
+    if (!id) return true;
+    return (
+      /^faq-[1-8]$/.test(id) ||
+      /^doc-[1-6]$/.test(id) ||
+      /^sch-(spring|summer|fall|winter|2025|2026)/.test(id) ||
+      /^inq-sample-/.test(id)
+    );
+  };
+
+  // FAQs State: defaults to clean empty array if no admin data exists
   const [faqs, setFaqs] = useState<FaqItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_FAQS_KEY);
-      return cached ? JSON.parse(cached) : initialFaqs;
+      if (cached) {
+        const list: FaqItem[] = JSON.parse(cached);
+        return list.filter((item) => !isMockItem(item?.id));
+      }
+      return [];
     } catch {
-      return initialFaqs;
+      return [];
     }
   });
 
-  // Documents State
+  // Documents State: defaults to clean empty array
   const [documents, setDocuments] = useState<DocumentItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_DOCS_KEY);
-      return cached ? JSON.parse(cached) : initialDocuments;
+      if (cached) {
+        const list: DocumentItem[] = JSON.parse(cached);
+        return list.filter((item) => !isMockItem(item?.id));
+      }
+      return [];
     } catch {
-      return initialDocuments;
+      return [];
     }
   });
 
-  // Inquiries State
+  // Inquiries State: clean initial state with zero mock records
   const [inquiries, setInquiries] = useState<InquiryItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const list: InquiryItem[] = JSON.parse(cached);
+        return list.filter((item) => !isMockItem(item?.id));
+      }
     } catch {
       // ignore
     }
-    return [
-      {
-        id: 'inq-sample-1',
-        studentId: '20241289',
-        name: 'LE VAN QUAN',
-        content: '한국어학당 3급 재학 중인데 다음 학기 D-4 비자 연장 시 은행 잔고증명서 금액 기준이 어떻게 되나요?',
-        status: 'pending',
-        adminNote: '대구출입국 최신 공시 기준(1,000만원 이상) 안내 예정',
-        createdAt: '2026-09-29T10:15:00Z',
-        updatedAt: '2026-09-29T10:15:00Z',
-      },
-      {
-        id: 'inq-sample-2',
-        studentId: '20239841',
-        name: 'WANG JIA',
-        content: '명교생활관 2학기 퇴사 후 원룸으로 이사할 예정인데, 체류지 변경 신고를 학교에서 대행해 주시나요?',
-        status: 'resolved',
-        adminNote: '2026-09-30 관할 구청(달서구청) 또는 하이코리아 전자민원 직접 접수 안내 완료',
-        createdAt: '2026-09-28T14:20:00Z',
-        updatedAt: '2026-09-30T09:00:00Z',
-      },
-    ];
+    return [];
   });
 
-  // Schedules State
+  // Schedules State: clean initial state
   const [schedules, setSchedules] = useState<ScheduleEvent[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
-      return cached ? JSON.parse(cached) : INITIAL_SCHEDULES;
+      if (cached) {
+        const list: ScheduleEvent[] = JSON.parse(cached);
+        return list.filter((item) => !isMockItem(item?.id));
+      }
+      return [];
     } catch {
-      return INITIAL_SCHEDULES;
+      return [];
     }
   });
 
@@ -105,139 +110,171 @@ function MainApp() {
     localStorage.setItem('kmu_language', lang);
   };
 
-  // Real-time Firestore Listeners with automatic cleanup of empty posts
+  // Real-time Firestore Listeners with automatic cleanup of empty posts and mock examples
   useEffect(() => {
     // 1. Real-time FAQs Listener & Auto-Pruning
     const unsubFaqs = onSnapshot(collection(db, 'faqs'), (snap) => {
-      if (!snap.empty) {
-        const list: FaqItem[] = [];
-        const emptyIds: string[] = [];
+      const list: FaqItem[] = [];
+      const emptyIds: string[] = [];
+      const mockIds: string[] = [];
 
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          const item = { ...data, id: data.id || docSnap.id } as FaqItem;
-          const hasTitle = !!item.title && item.title.trim() !== '';
-          const plainContent = (item.content || '').replace(/<[^>]*>/g, '').trim();
-          const hasContent = plainContent !== '' || !!item.imageUrl || (item.content || '').includes('<img');
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const item = { ...data, id: data.id || docSnap.id } as FaqItem;
+        if (isMockItem(item.id)) {
+          mockIds.push(item.id);
+          return;
+        }
+        const hasTitle = !!item.title && item.title.trim() !== '';
+        const plainContent = (item.content || '').replace(/<[^>]*>/g, '').trim();
+        const hasContent = plainContent !== '' || !!item.imageUrl || (item.content || '').includes('<img');
 
-          if (!hasTitle || !hasContent) {
-            emptyIds.push(item.id);
-          } else {
-            list.push(item);
-          }
-        });
+        if (!hasTitle || !hasContent) {
+          emptyIds.push(item.id);
+        } else {
+          list.push(item);
+        }
+      });
 
-        list.sort((a, b) => {
-          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-          if (a.order !== undefined) return -1;
-          if (b.order !== undefined) return 1;
-          return 0;
-        });
+      list.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
+        return 0;
+      });
 
-        setFaqs(list);
+      setFaqs(list);
+      try {
+        localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+
+      // Auto delete empty or mock posts from Firestore
+      [...emptyIds, ...mockIds].forEach(async (id) => {
         try {
-          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
+          await deleteDoc(doc(db, 'faqs', id));
         } catch {
           // ignore
         }
-
-        // Auto delete empty posts from Firestore
-        emptyIds.forEach(async (id) => {
-          try {
-            await deleteDoc(doc(db, 'faqs', id));
-          } catch {
-            // ignore
-          }
-        });
-      }
+      });
     }, (err) => {
       console.warn('Real-time faqs listener error, using local fallback:', err);
     });
 
     // 2. Real-time Documents Listener & Auto-Pruning
     const unsubDocs = onSnapshot(collection(db, 'documents'), (snap) => {
-      if (!snap.empty) {
-        const list: DocumentItem[] = [];
-        const emptyIds: string[] = [];
+      const list: DocumentItem[] = [];
+      const emptyIds: string[] = [];
+      const mockIds: string[] = [];
 
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          const item = { ...data, id: data.id || docSnap.id } as DocumentItem;
-          const hasTitle = !!item.title && item.title.trim() !== '';
-          const hasFile = !!item.fileName && item.fileName.trim() !== '';
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const item = { ...data, id: data.id || docSnap.id } as DocumentItem;
+        if (isMockItem(item.id)) {
+          mockIds.push(item.id);
+          return;
+        }
+        const hasTitle = !!item.title && item.title.trim() !== '';
+        const hasFile = !!item.fileName && item.fileName.trim() !== '';
 
-          if (!hasTitle || !hasFile) {
-            emptyIds.push(item.id);
-          } else {
-            list.push(item);
-          }
-        });
+        if (!hasTitle || !hasFile) {
+          emptyIds.push(item.id);
+        } else {
+          list.push(item);
+        }
+      });
 
-        list.sort((a, b) => {
-          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-          if (a.order !== undefined) return -1;
-          if (b.order !== undefined) return 1;
-          return 0;
-        });
+      list.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
+        return 0;
+      });
 
-        setDocuments(list);
+      setDocuments(list);
+      try {
+        localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+
+      [...emptyIds, ...mockIds].forEach(async (id) => {
         try {
-          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
+          await deleteDoc(doc(db, 'documents', id));
         } catch {
           // ignore
         }
-
-        emptyIds.forEach(async (id) => {
-          try {
-            await deleteDoc(doc(db, 'documents', id));
-          } catch {
-            // ignore
-          }
-        });
-      }
+      });
     }, (err) => {
       console.warn('Real-time documents listener error, using local fallback:', err);
     });
 
     // 3. Real-time Inquiries Listener
     const unsubInquiries = onSnapshot(collection(db, 'inquiries'), (snap) => {
-      if (!snap.empty) {
-        const list: InquiryItem[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          list.push({ ...data, id: data.id || docSnap.id } as InquiryItem);
-        });
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setInquiries(list);
+      const list: InquiryItem[] = [];
+      const mockIds: string[] = [];
+
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const item = { ...data, id: data.id || docSnap.id } as InquiryItem;
+        if (isMockItem(item.id)) {
+          mockIds.push(item.id);
+          return;
+        }
+        list.push(item);
+      });
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setInquiries(list);
+      try {
+        localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+
+      mockIds.forEach(async (id) => {
         try {
-          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
+          await deleteDoc(doc(db, 'inquiries', id));
         } catch {
           // ignore
         }
-      }
+      });
     }, (err) => {
       console.warn('Real-time inquiries listener error:', err);
     });
 
     // 4. Real-time Schedules Listener
     const unsubSchedules = onSnapshot(collection(db, 'schedules'), (snap) => {
-      if (!snap.empty) {
-        const list: ScheduleEvent[] = [];
-        snap.forEach((docSnap) => {
-          const data = docSnap.data();
-          list.push({ ...data, id: data.id || docSnap.id } as ScheduleEvent);
-        });
-        list.sort((a, b) => {
-          if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-          return a.startDate.localeCompare(b.startDate);
-        });
-        setSchedules(list);
+      const list: ScheduleEvent[] = [];
+      const mockIds: string[] = [];
+
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const item = { ...data, id: data.id || docSnap.id } as ScheduleEvent;
+        if (isMockItem(item.id)) {
+          mockIds.push(item.id);
+          return;
+        }
+        list.push(item);
+      });
+      list.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+        return a.startDate.localeCompare(b.startDate);
+      });
+      setSchedules(list);
+      try {
+        localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
+      }
+
+      mockIds.forEach(async (id) => {
         try {
-          localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
+          await deleteDoc(doc(db, 'schedules', id));
         } catch {
           // ignore
         }
-      }
+      });
     }, (err) => {
       console.warn('Real-time schedules listener error:', err);
     });

@@ -92,15 +92,15 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
 
   // Dynamic Translated strings
   const [transName, setTransName] = useState(config.chatbotName || '계명어학당 안내 챗봇');
-  const [transSubtitle, setTransSubtitle] = useState(config.chatbotSubtitle || '24시간 유학생 실시간 상담');
+  const [transSubtitle, setTransSubtitle] = useState(config.chatbotSubtitle || 'FAQ·서식·학사일정 실시간 안내');
   const [transWelcome, setTransWelcome] = useState(
     config.chatbotWelcomeMsg ||
-      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\nD-4 비자 연장, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정 서식, 한국어학당 일정 등 무엇이든 물어보세요!'
+      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\n관리자가 등록한 자주 묻는 질문(FAQ), 행정 서식 자료, 한국어학당 학사일정을 바탕으로 정확하게 안내해 드립니다. 궁금한 점을 질문해 보세요!'
   );
   const [transPlaceholder, setTransPlaceholder] = useState(
     config.chatbotPlaceholder || '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)'
   );
-  const [transBadge, setTransBadge] = useState(config.chatbotBadgeText || '한국어학당 안내 챗봇');
+  const [transBadge, setTransBadge] = useState(config.chatbotBadgeText || '등록 정보 기반 안내');
   const [transSuggestions, setTransSuggestions] = useState<string[]>(
     config.chatbotSuggestions || [
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',
@@ -114,11 +114,11 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   // Auto-translate configured properties whenever chatLang or config changes
   useEffect(() => {
     const rawName = config.chatbotName || '계명어학당 안내 챗봇';
-    const rawSubtitle = config.chatbotSubtitle || '24시간 유학생 실시간 상담';
-    const rawBadge = config.chatbotBadgeText || '한국어학당 안내 챗봇';
+    const rawSubtitle = config.chatbotSubtitle || 'FAQ·서식·학사일정 실시간 안내';
+    const rawBadge = config.chatbotBadgeText || '등록 정보 기반 안내';
     const rawWelcome =
       config.chatbotWelcomeMsg ||
-      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\nD-4 비자 연장, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정 서식, 한국어학당 일정 등 무엇이든 물어보세요!';
+      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\n관리자가 등록한 자주 묻는 질문(FAQ), 행정 서식 자료, 한국어학당 학사일정을 바탕으로 정확하게 안내해 드립니다. 궁금한 점을 질문해 보세요!';
     const rawPlaceholder = config.chatbotPlaceholder || '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)';
     const rawSuggestions = config.chatbotSuggestions || [
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',

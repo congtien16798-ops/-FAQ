@@ -25,24 +25,24 @@ export const ChatbotManager: React.FC = () => {
 
   // Local Form States
   const [enabled, setEnabled] = useState(config.chatbotEnabled !== false);
-  const [botName, setBotName] = useState(config.chatbotName || '계명어학당 AI 챗봇');
-  const [botSubtitle, setBotSubtitle] = useState(config.chatbotSubtitle || '24시간 유학생 실시간 상담');
-  const [badgeText, setBadgeText] = useState(config.chatbotBadgeText || 'AI 가이드 챗봇');
+  const [botName, setBotName] = useState(config.chatbotName || '계명어학당 안내 챗봇');
+  const [botSubtitle, setBotSubtitle] = useState(config.chatbotSubtitle || 'FAQ·서식·학사일정 실시간 안내');
+  const [badgeText, setBadgeText] = useState(config.chatbotBadgeText || '등록 정보 기반 안내');
   const [welcomeMsg, setWelcomeMsg] = useState(
     config.chatbotWelcomeMsg ||
-      '안녕하세요! 계명대학교 한국어학당 AI 가이드 챗봇입니다. 🎓\nD-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정실 위치 등 무엇이든 물어보세요!'
+      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\n관리자가 등록한 자주 묻는 질문(FAQ), 행정 서식 자료, 한국어학당 학사일정을 바탕으로 정확하게 안내해 드립니다. 궁금한 점을 질문해 보세요!'
   );
   const [placeholder, setPlaceholder] = useState(
-    config.chatbotPlaceholder || '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준)'
+    config.chatbotPlaceholder || '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)'
   );
   const [botColor, setBotColor] = useState(config.chatbotColor || config.mainColor || '#1A3B6B');
   const [suggestions, setSuggestions] = useState<string[]>(
     config.chatbotSuggestions || [
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',
       '수료 및 비자 연장을 위한 최소 출석률은?',
-      '한국어학당 학생도 합법적으로 아르바이트 가능한가요?',
+      '2026학년도 한국어학당 학사 일정 알려주세요',
+      '외국인 유학생 아르바이트(시간제 취업) 가능한가요?',
       '국제처 행정실(동영관 101호) 위치와 운영시간은?',
-      '명교생활관(기숙사) 외박 신청은 어떻게 하나요?',
     ]
   );
   const [newSuggestion, setNewSuggestion] = useState('');
@@ -142,20 +142,20 @@ export const ChatbotManager: React.FC = () => {
 
   const handleResetDefaults = () => {
     if (!window.confirm('챗봇 설정을 기본값으로 초기화하시겠습니까?')) return;
-    setBotName('계명어학당 AI 챗봇');
-    setBotSubtitle('24시간 유학생 실시간 상담');
-    setBadgeText('AI 가이드 챗봇');
+    setBotName('계명어학당 안내 챗봇');
+    setBotSubtitle('FAQ·서식·학사일정 실시간 안내');
+    setBadgeText('등록 정보 기반 안내');
     setWelcomeMsg(
-      '안녕하세요! 계명대학교 한국어학당 AI 가이드 챗봇입니다. 🎓\nD-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정실 위치 등 무엇이든 물어보세요!'
+      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\n관리자가 등록한 자주 묻는 질문(FAQ), 행정 서식 자료, 한국어학당 학사일정을 바탕으로 정확하게 안내해 드립니다. 궁금한 점을 질문해 보세요!'
     );
-    setPlaceholder('질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준)');
+    setPlaceholder('질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)');
     setBotColor(config.mainColor || '#1A3B6B');
     setSuggestions([
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',
       '수료 및 비자 연장을 위한 최소 출석률은?',
-      '한국어학당 학생도 합법적으로 아르바이트 가능한가요?',
+      '2026학년도 한국어학당 학사 일정 알려주세요',
+      '외국인 유학생 아르바이트(시간제 취업) 가능한가요?',
       '국제처 행정실(동영관 101호) 위치와 운영시간은?',
-      '명교생활관(기숙사) 외박 신청은 어떻게 하나요?',
     ]);
   };
 
@@ -208,14 +208,14 @@ export const ChatbotManager: React.FC = () => {
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
               <Bot className="w-5 h-5 text-[#1A3B6B]" />
-              <span>AI 가이드 챗봇 종합 설정</span>
+              <span>유학생 안내 챗봇 종합 설정 (관리자 등록 정보 기반)</span>
             </h3>
-            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-[#1A3B6B]">
-              Gemini AI
+            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              검증 데이터 기반
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            외국인 유학생 포털 우측 하단에 표시되는 24시간 실시간 AI 상담 챗봇의 이름, 추천 질문, 환영 인사말 및 자동 다국어 번역을 설정합니다.
+            외국인 유학생 포털 우측 하단에 표시되는 실시간 안내 챗봇의 명칭, 추천 질문, 환영 메시지 및 자동 다국어 번역을 설정합니다.
           </p>
         </div>
 
@@ -237,6 +237,15 @@ export const ChatbotManager: React.FC = () => {
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? '저장 중...' : '설정 저장'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Verified Admin Knowledge Base Notice Banner */}
+      <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2.5">
+        <HelpCircle className="w-4 h-4 text-[#1A3B6B] shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
+          <strong className="text-[#1A3B6B]">관리자 등록 정보(FAQ·서식·학사일정) 100% 기반 안내:</strong><br />
+          외부 AI의 임의 답변이나 허위 정보(환각) 없이, <strong>관리자님이 직접 등록하신 자주 묻는 질문(FAQ)</strong>, <strong>서식 및 자료실</strong>, <strong>한국어학당 학사일정</strong> 데이터를 정밀 검색하여 학생에게 신뢰할 수 있는 안내문과 바로가기 추천 카드를 제공합니다. 등록된 정보가 없을 경우 <strong>1:1 빠른 문의</strong>로 직접 접수하도록 유도합니다.
         </div>
       </div>
 

@@ -118,6 +118,15 @@ button, a, input, select, textarea {
   touch-action: manipulation;
 }
 
+/* Prevent iOS Safari unwanted auto-zoom on input focus */
+@media screen and (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* Prevent text size adjustment on orientation changes & stabilize layout width across tabs */
 html {
   -webkit-text-size-adjust: 100%;

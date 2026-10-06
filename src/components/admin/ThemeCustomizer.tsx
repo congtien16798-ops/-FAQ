@@ -152,32 +152,47 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
   }, [setIsDesignMode]);
 
   // Real datasets for authentic 1:1 Live Preview (미리보기와 메인화면 일치화)
-  const effectiveFaqs: FaqItem[] = (faqs && faqs.length > 0) ? faqs : (() => {
-    try {
-      const c = localStorage.getItem('kmu_faqs_cache');
-      return c ? JSON.parse(c) : initialFaqs;
-    } catch {
-      return initialFaqs;
-    }
-  })();
+  const isMockItem = (id?: string) => {
+    if (!id) return true;
+    return (
+      /^faq-[1-8]$/.test(id) ||
+      /^doc-[1-6]$/.test(id) ||
+      /^sch-(spring|summer|fall|winter|2025|2026)/.test(id)
+    );
+  };
 
-  const effectiveDocs: DocumentItem[] = (documents && documents.length > 0) ? documents : (() => {
-    try {
-      const c = localStorage.getItem('kmu_docs_cache');
-      return c ? JSON.parse(c) : initialDocuments;
-    } catch {
-      return initialDocuments;
-    }
-  })();
+  const effectiveFaqs: FaqItem[] = (faqs && faqs.length > 0)
+    ? faqs.filter((f) => !isMockItem(f?.id))
+    : (() => {
+        try {
+          const c = localStorage.getItem('kmu_faqs_cache');
+          return c ? JSON.parse(c).filter((f: any) => !isMockItem(f?.id)) : [];
+        } catch {
+          return [];
+        }
+      })();
 
-  const effectiveSchedules: ScheduleEvent[] = (schedules && schedules.length > 0) ? schedules : (() => {
-    try {
-      const c = localStorage.getItem('kmu_schedules_cache');
-      return c ? JSON.parse(c) : INITIAL_SCHEDULES;
-    } catch {
-      return INITIAL_SCHEDULES;
-    }
-  })();
+  const effectiveDocs: DocumentItem[] = (documents && documents.length > 0)
+    ? documents.filter((d) => !isMockItem(d?.id))
+    : (() => {
+        try {
+          const c = localStorage.getItem('kmu_docs_cache');
+          return c ? JSON.parse(c).filter((d: any) => !isMockItem(d?.id)) : [];
+        } catch {
+          return [];
+        }
+      })();
+
+  const effectiveSchedules: ScheduleEvent[] = (schedules && schedules.length > 0)
+    ? schedules.filter((s) => !isMockItem(s?.id))
+    : (() => {
+        try {
+          const c = localStorage.getItem('kmu_schedules_cache');
+          return c ? JSON.parse(c).filter((s: any) => !isMockItem(s?.id)) : [];
+        } catch {
+          return [];
+        }
+      })();
 
   // Preset themes
   const presets = [
