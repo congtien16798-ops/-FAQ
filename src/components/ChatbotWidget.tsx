@@ -360,8 +360,10 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
 
       // Check if we have matched content
       if (candidates.length === 0) {
-        // No match found -> Guide to 1:1 Inquiry as requested
-        let fallbackKo = `문의하신 **'${query}'** 내용과 관련된 공식 안내 자료나 일정이 현재 등록되어 있지 않습니다. 😥\n\n정확하고 빠른 안내를 위해 담당 선생님께 **1:1 빠른 문의**를 남겨주시면 확인 후 학적 연락처로 신속히 답변해 드리겠습니다.`;
+        // No match found -> Guide to 1:1 Inquiry as configured by administrator
+        const fallbackKo =
+          config.chatbotNoMatchMsg ||
+          `문의하신 **'${query}'** 내용과 관련된 공식 안내 자료나 일정이 현재 등록되어 있지 않습니다. 😥\n\n정확하고 빠른 안내를 위해 담당 선생님께 **1:1 빠른 문의**를 남겨주시면 확인 후 학적 연락처로 신속히 답변해 드리겠습니다.`;
         let finalFallback = fallbackKo;
 
         if (userQueryLang !== 'ko') {
@@ -372,12 +374,14 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           }
         }
 
+        const showInquiryBtn = config.chatbotShowInquiryOnNoMatch !== false;
+
         const assistantMsg: ChatMessage = {
           id: `bot-${Date.now()}`,
           role: 'assistant',
           content: finalFallback,
           timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-          showInquiryButton: true,
+          showInquiryButton: showInquiryBtn,
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
@@ -597,7 +601,7 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
 
       {/* Chat Window Modal */}
       {isOpen && (
-        <div className="fixed bottom-20 sm:bottom-22 right-3 sm:right-6 w-[calc(100vw-24px)] sm:w-[390px] md:w-[410px] h-[550px] max-h-[82vh] bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 print:hidden">
+        <div className="fixed bottom-18 sm:bottom-22 right-2.5 sm:right-6 w-[calc(100vw-20px)] sm:w-[390px] md:w-[410px] h-[520px] max-h-[calc(100vh-85px)] bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200 print:hidden">
           {/* Header */}
           <div
             className="px-4 py-3.5 text-white flex items-center justify-between shrink-0 shadow-xs"

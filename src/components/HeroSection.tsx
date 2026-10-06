@@ -52,36 +52,38 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
     let isMounted = true;
     const translateHeroData = async () => {
-      // 1. Categories
-      const map: Record<string, string> = {};
-      for (const cat of config.categories || []) {
-        if (cat.name[currentLang]) {
-          map[cat.id] = cat.name[currentLang]!;
-        } else {
-          map[cat.id] = await translateText(cat.name.ko, currentLang);
+      try {
+        const catPromises = (config.categories || []).map(async (cat) => {
+          if (cat.name[currentLang]) {
+            return { id: cat.id, label: cat.name[currentLang]! };
+          }
+          const translated = await translateText(cat.name.ko, currentLang);
+          return { id: cat.id, label: translated };
+        });
+
+        const [catResults, th, tp, tb] = await Promise.all([
+          Promise.all(catPromises),
+          config.heroTitle && config.heroTitle !== '계명대학교 한국어학당 가이드'
+            ? translateText(config.heroTitle, currentLang)
+            : Promise.resolve(''),
+          config.searchPlaceholder ? translateText(config.searchPlaceholder, currentLang) : Promise.resolve(''),
+          config.searchButtonText && config.searchButtonText !== '검색'
+            ? translateText(config.searchButtonText, currentLang)
+            : Promise.resolve(''),
+        ]);
+
+        if (isMounted) {
+          const map: Record<string, string> = {};
+          catResults.forEach((c) => {
+            map[c.id] = c.label;
+          });
+          setCatLabels(map);
+          if (th) setTransHeroTitle(th);
+          if (tp) setTransPlaceholder(tp);
+          if (tb) setTransBtnText(tb);
         }
-      }
-
-      // 2. Custom Hero Title if customized
-      if (config.heroTitle && config.heroTitle !== '계명대학교 한국어학당 가이드') {
-        const th = await translateText(config.heroTitle, currentLang);
-        if (isMounted) setTransHeroTitle(th);
-      }
-
-      // 3. Custom Placeholder if customized
-      if (config.searchPlaceholder) {
-        const tp = await translateText(config.searchPlaceholder, currentLang);
-        if (isMounted) setTransPlaceholder(tp);
-      }
-
-      // 4. Custom Button text
-      if (config.searchButtonText && config.searchButtonText !== '검색') {
-        const tb = await translateText(config.searchButtonText, currentLang);
-        if (isMounted) setTransBtnText(tb);
-      }
-
-      if (isMounted) {
-        setCatLabels(map);
+      } catch (err) {
+        console.warn('Hero translation error:', err);
       }
     };
 

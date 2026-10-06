@@ -44,16 +44,30 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
     setIsTranslating(true);
 
     const translateDocs = async () => {
-      const newMap: Record<string, { title: string; description: string; category: string }> = {};
-      for (const doc of documents) {
-        const transTitle = await translateText(doc.title, currentLang);
-        const transDesc = await translateText(doc.description, currentLang);
-        const transCat = await translateText(doc.category, currentLang);
-        newMap[doc.id] = { title: transTitle, description: transDesc, category: transCat };
-      }
-      if (isMounted) {
-        setTransDocMap(newMap);
-        setIsTranslating(false);
+      try {
+        const validDocs = (documents || []).filter(Boolean);
+        const results = await Promise.all(
+          validDocs.map(async (doc) => {
+            const [transTitle, transDesc, transCat] = await Promise.all([
+              translateText(doc.title || '', currentLang),
+              translateText(doc.description || '', currentLang),
+              translateText(doc.category || '', currentLang),
+            ]);
+            return { id: doc.id, title: transTitle, description: transDesc, category: transCat };
+          })
+        );
+
+        if (isMounted) {
+          const newMap: Record<string, { title: string; description: string; category: string }> = {};
+          results.forEach((r) => {
+            newMap[r.id] = { title: r.title, description: r.description, category: r.category };
+          });
+          setTransDocMap(newMap);
+          setIsTranslating(false);
+        }
+      } catch (err) {
+        console.warn('Document translation error:', err);
+        if (isMounted) setIsTranslating(false);
       }
     };
 
@@ -125,7 +139,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8">
       {/* Download Alert Toast */}
       {downloadSuccessToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2E7D5B] text-white px-4 py-3 rounded-md shadow-lg text-sm flex items-center gap-2 border border-emerald-400">
@@ -135,9 +149,9 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
       )}
 
       {/* Header & Category Tabs (Unified with FAQ standard & image.png) */}
-      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
+      <div className="w-full mb-5 sm:mb-6 pb-3.5 sm:pb-4 border-b border-[#E2E5E8] space-y-3">
         <div>
-          <h2 className="text-xl font-bold text-[#1A3B6B]">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1A3B6B]">
             {t.navDownloads}
           </h2>
         </div>
@@ -156,7 +170,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
               <button
                 key={`doc-filter-cat-${cat}-${idx}`}
                 onClick={() => setSelectedCategory(cat)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   isSelected
                     ? 'bg-[#1A3B6B] text-white border-[#1A3B6B] shadow-xs'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
@@ -227,18 +241,18 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
                 className="bg-white rounded-md border border-[#E2E5E8] hover:border-gray-300 transition-all shadow-2xs overflow-hidden"
               >
                 {/* Main Row / Header */}
-                <div className="px-4 py-3.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
-                    {/* Category (Bold, same font size as title) */}
-                    <span className="text-sm md:text-base font-bold shrink-0 text-gray-900">
+                <div className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    {/* Category (Bold, responsive size) */}
+                    <span className="text-xs sm:text-sm lg:text-base font-bold shrink-0 text-gray-900">
                       {docCategory}
                     </span>
 
                     {/* Semi-transparent Divider Line (반투명 구분선) */}
-                    <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+                    <span className="w-px h-3 sm:h-3.5 lg:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
 
-                    {/* Document Title (Bold, same font size as category) */}
-                    <h4 className="text-sm md:text-base font-bold text-gray-800 leading-snug flex-1 truncate sm:whitespace-normal">
+                    {/* Document Title (Bold, responsive size) */}
+                    <h4 className="text-xs sm:text-sm lg:text-base font-bold text-gray-800 leading-snug sm:leading-relaxed flex-1 truncate sm:whitespace-normal">
                       {docTitle}
                     </h4>
 
@@ -257,7 +271,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => handleDownload(doc)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-[#142e54] text-white text-xs font-bold transition-colors cursor-pointer shadow-2xs min-h-[32px]"
+                      className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-[#142e54] text-white text-[11px] sm:text-xs font-bold transition-colors cursor-pointer shadow-2xs min-h-[32px]"
                       style={{ backgroundColor: config.mainColor }}
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -268,7 +282,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
                 {/* Document Description Body if present */}
                 {docDesc && (
-                  <div className="px-4 pb-3.5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-600 leading-relaxed bg-[#fafafa]/50">
+                  <div className="px-3.5 sm:px-4.5 pb-3 sm:pb-3.5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-600 leading-relaxed bg-[#fafafa]/50">
                     <p className="line-clamp-2">{docDesc}</p>
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400 sm:hidden">
                       <span className="px-1.5 py-0.5 rounded font-bold text-[10px] border border-blue-200 bg-blue-50 text-[#1A3B6B]">

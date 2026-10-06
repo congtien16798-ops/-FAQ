@@ -177,6 +177,8 @@ export interface SiteConfig {
   chatbotColor?: string;
   chatbotBadgeText?: string;
   chatbotSuggestions?: string[];
+  chatbotNoMatchMsg?: string;
+  chatbotShowInquiryOnNoMatch?: boolean;
   // 1:1 Quick Inquiry Settings
   inquiryEnabled?: boolean;
   inquiryTitle?: string;

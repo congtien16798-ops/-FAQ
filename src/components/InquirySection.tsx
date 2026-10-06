@@ -311,14 +311,14 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8">
       {/* Header (Clean layout matching FAQ & Downloads standard) */}
-      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8]">
-        <h2 className="text-xl font-bold text-[#1A3B6B]">
+      <div className="w-full mb-5 sm:mb-6 pb-3.5 sm:pb-4 border-b border-[#E2E5E8]">
+        <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1A3B6B]">
           {transTitle}
         </h2>
         {transSubtitle && (
-          <p className="text-xs sm:text-sm text-gray-500 mt-1.5 leading-relaxed">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-1.5 leading-relaxed">
             {transSubtitle}
           </p>
         )}
@@ -326,12 +326,12 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
 
       {/* If Inquiry is paused by admin */}
       {!inquiryEnabled ? (
-        <div className="bg-white rounded-md border border-[#E2E5E8] p-6 sm:p-8 shadow-xs text-center space-y-4">
+        <div className="bg-white rounded-lg sm:rounded-md border border-[#E2E5E8] p-5 sm:p-8 shadow-xs text-center space-y-4">
           <div className="w-14 h-14 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
             <AlertCircle className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">
+            <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-1">
               1:1 빠른 문의 온라인 접수 일시 중단 안내
             </h3>
             <p className="text-xs text-gray-600 max-w-md mx-auto leading-relaxed">
@@ -339,7 +339,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
             </p>
           </div>
 
-          <div className="max-w-md mx-auto p-4 bg-gray-50 border border-gray-200 rounded text-left text-xs text-gray-600 space-y-2">
+          <div className="max-w-md mx-auto p-3.5 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg sm:rounded text-left text-xs text-gray-600 space-y-2">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#1A3B6B] shrink-0" />
               <span><strong>행정실 운영시간:</strong> {config.officeHours}</span>
@@ -356,7 +356,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
         </div>
       ) : (
         /* Active Form Container */
-        <div className="bg-white rounded-md border border-[#E2E5E8] p-3.5 sm:p-6 shadow-xs">
+        <div className="bg-white rounded-lg sm:rounded-md border border-[#E2E5E8] p-3.5 sm:p-5 lg:p-6 shadow-xs">
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Student ID, Name & Phone Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">

@@ -87,26 +87,40 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Auto-prune empty FAQ posts (내용없고 빈 게시글 자동 삭제)
+  // Auto-prune empty FAQ posts and mock examples (자동 생성 예시 및 빈 게시글 영구 삭제)
   useEffect(() => {
     if (!faqs || faqs.length === 0) return;
-    const emptyItems = faqs.filter((f) => {
+    const isMock = (id?: string) => {
+      if (!id) return true;
+      const lower = id.toLowerCase();
+      return (
+        /^faq-[1-8]$/.test(lower) ||
+        /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
+        lower.startsWith('mock') ||
+        lower.startsWith('sample') ||
+        lower.startsWith('example') ||
+        lower.startsWith('demo')
+      );
+    };
+
+    const invalidItems = faqs.filter((f) => {
       if (!f) return true;
+      if (isMock(f.id)) return true;
       const noTitle = !f.title || f.title.trim() === '';
       const plainContent = (f.content || '').replace(/<[^>]*>/g, '').trim();
       const noContent = plainContent === '' && !f.imageUrl && !(f.content || '').includes('<img');
       return noTitle || noContent;
     });
 
-    if (emptyItems.length > 0) {
-      const validOnly = faqs.filter((f) => !emptyItems.includes(f));
+    if (invalidItems.length > 0) {
+      const validOnly = faqs.filter((f) => !invalidItems.includes(f));
       setFaqs(validOnly);
       try {
         localStorage.setItem('kmu_faqs_cache', JSON.stringify(validOnly));
       } catch {
         // ignore
       }
-      emptyItems.forEach(async (item) => {
+      invalidItems.forEach(async (item) => {
         if (item?.id) {
           try {
             await deleteDoc(doc(db, 'faqs', item.id));

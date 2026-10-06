@@ -62,6 +62,45 @@ export async function translateText(
     return pendingRequests.get(cacheKey)!;
   }
 
+  // Handle long text chunking to prevent HTTP 414 URI Too Long errors
+  if (trimmed.length > 700) {
+    const lines = trimmed.split('\n');
+    const chunks: string[] = [];
+    let currentChunk = '';
+
+    for (const line of lines) {
+      if ((currentChunk + '\n' + line).length > 600 && currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = line;
+      } else {
+        currentChunk = currentChunk ? currentChunk + '\n' + line : line;
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk);
+
+    if (chunks.length > 1) {
+      const fetchPromise = (async () => {
+        try {
+          const translatedChunks = await Promise.all(
+            chunks.map((chunk) => translateText(chunk, targetLang, sourceLang))
+          );
+          const joined = translatedChunks.join('\n');
+          memoryCache[cacheKey] = joined;
+          persistCache();
+          return joined;
+        } catch (err) {
+          console.warn(`[AutoTranslator] Chunk translation failed for [${targetLang}]:`, err);
+          return text;
+        } finally {
+          pendingRequests.delete(cacheKey);
+        }
+      })();
+
+      pendingRequests.set(cacheKey, fetchPromise);
+      return fetchPromise;
+    }
+  }
+
   const tl = langMap[targetLang] || 'en';
   const sl = sourceLang === 'ko' ? 'ko' : sourceLang;
 

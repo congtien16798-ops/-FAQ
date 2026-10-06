@@ -51,21 +51,22 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
 
     let isMounted = true;
     const translateNotice = async () => {
-      if (config.popupBadge) {
-        const b = await translateText(config.popupBadge, currentLang);
-        if (isMounted) setTransBadge(b);
-      }
-      if (config.popupTitle) {
-        const t = await translateText(config.popupTitle, currentLang);
-        if (isMounted) setTransTitle(t);
-      }
-      if (config.popupContent) {
-        const c = await translateText(config.popupContent, currentLang);
-        if (isMounted) setTransContent(c);
-      }
-      if (config.popupLinkText) {
-        const l = await translateText(config.popupLinkText, currentLang);
-        if (isMounted) setTransLinkText(l);
+      try {
+        const [b, t, c, l] = await Promise.all([
+          config.popupBadge ? translateText(config.popupBadge, currentLang) : Promise.resolve(''),
+          config.popupTitle ? translateText(config.popupTitle, currentLang) : Promise.resolve(''),
+          config.popupContent ? translateText(config.popupContent, currentLang) : Promise.resolve(''),
+          config.popupLinkText ? translateText(config.popupLinkText, currentLang) : Promise.resolve(''),
+        ]);
+
+        if (isMounted) {
+          if (b) setTransBadge(b);
+          if (t) setTransTitle(t);
+          if (c) setTransContent(c);
+          if (l) setTransLinkText(l);
+        }
+      } catch (err) {
+        console.warn('NoticePopup translation error:', err);
       }
     };
 

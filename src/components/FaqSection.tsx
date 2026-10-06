@@ -46,32 +46,52 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     setIsTranslating(true);
 
     const translateAll = async () => {
-      // 1. FAQs title & rich HTML content
-      const newMap: Record<string, { title: string; content: string }> = {};
-      for (const faq of faqs || []) {
-        if (!faq) continue;
-        const transTitle = await translateText(faq.title || '', currentLang);
-        const transContent = await translateHtml(faq.content || '', currentLang);
-        newMap[faq.id] = { title: transTitle, content: transContent };
-      }
+      try {
+        // 1. FAQs title & rich HTML content in parallel
+        const validFaqs = (faqs || []).filter(Boolean);
+        const faqPromises = validFaqs.map(async (faq) => {
+          const [transTitle, transContent] = await Promise.all([
+            translateText(faq.title || '', currentLang),
+            translateHtml(faq.content || '', currentLang),
+          ]);
+          return { id: faq.id, title: transTitle, content: transContent };
+        });
 
-      // 2. Category names for badges
-      const newCatMap: Record<string, string> = {};
-      for (const cat of config.categories || []) {
-        if (!cat) continue;
-        if (cat.name?.[currentLang]) {
-          newCatMap[cat.id] = cat.name[currentLang]!;
-        } else if (cat.name?.ko) {
-          newCatMap[cat.id] = await translateText(cat.name.ko, currentLang);
-        } else {
-          newCatMap[cat.id] = cat.id;
+        // 2. Category names for badges in parallel
+        const validCats = (config.categories || []).filter(Boolean);
+        const catPromises = validCats.map(async (cat) => {
+          if (cat.name?.[currentLang]) {
+            return { id: cat.id, name: cat.name[currentLang]! };
+          } else if (cat.name?.ko) {
+            const trans = await translateText(cat.name.ko, currentLang);
+            return { id: cat.id, name: trans };
+          }
+          return { id: cat.id, name: cat.id };
+        });
+
+        const [faqResults, catResults] = await Promise.all([
+          Promise.all(faqPromises),
+          Promise.all(catPromises),
+        ]);
+
+        if (isMounted) {
+          const newMap: Record<string, { title: string; content: string }> = {};
+          faqResults.forEach((r) => {
+            newMap[r.id] = { title: r.title, content: r.content };
+          });
+
+          const newCatMap: Record<string, string> = {};
+          catResults.forEach((r) => {
+            newCatMap[r.id] = r.name;
+          });
+
+          setTranslatedMap(newMap);
+          setCatTranslations(newCatMap);
+          setIsTranslating(false);
         }
-      }
-
-      if (isMounted) {
-        setTranslatedMap(newMap);
-        setCatTranslations(newCatMap);
-        setIsTranslating(false);
+      } catch (err) {
+        console.warn('FAQ translation error:', err);
+        if (isMounted) setIsTranslating(false);
       }
     };
 
@@ -178,7 +198,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   ];
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <div className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8">
       {/* Toast Notification */}
       {copyToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#1A3B6B] text-white px-4 py-3 rounded-md shadow-lg text-sm flex items-center gap-2 border border-blue-400">
@@ -188,9 +208,9 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       )}
 
       {/* Header & Category Tabs */}
-      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8] space-y-3.5">
+      <div className="w-full mb-5 sm:mb-6 pb-3.5 sm:pb-4 border-b border-[#E2E5E8] space-y-3">
         <div>
-          <h2 className="text-xl font-bold text-[#1A3B6B]">
+          <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1A3B6B]">
             {t.navFaq}
           </h2>
         </div>
@@ -208,7 +228,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
               <button
                 key={`faq-category-chip-${cat.id || idx}-${idx}`}
                 onClick={() => setSelectedCategory(cat.id as any)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   isSelected
                     ? 'bg-[#1A3B6B] text-white border-[#1A3B6B] shadow-xs'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
@@ -288,20 +308,20 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                 {/* Accordion Header */}
                 <div
                   onClick={() => toggleExpand(uniqueItemKey)}
-                  className="px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+                  className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3 cursor-pointer select-none"
                 >
-                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                     {/* Pinned indicator if pinned */}
                     {faq.pinned && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold bg-[#D97736]/10 text-[#D97736] border border-[#D97736]/30 shrink-0">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-[#D97736]/10 text-[#D97736] border border-[#D97736]/30 shrink-0">
                         <Pin className="w-2.5 h-2.5" />
                         <span>{t.pinned}</span>
                       </span>
                     )}
 
-                    {/* Category (Bold, same font size as question title) */}
+                    {/* Category (Bold, responsive size) */}
                     <span
-                      className={`text-sm md:text-base font-bold shrink-0 transition-colors ${
+                      className={`text-xs sm:text-sm lg:text-base font-bold shrink-0 transition-colors ${
                         isExpanded ? 'text-[#1A3B6B]' : 'text-gray-900'
                       }`}
                     >
@@ -309,11 +329,11 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                     </span>
 
                     {/* Semi-transparent Divider Line (반투명 구분선) */}
-                    <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+                    <span className="w-px h-3 sm:h-3.5 lg:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
 
-                    {/* Question Title (Bold, same font size as category, center aligned) */}
+                    {/* Question Title (Bold, responsive size, center aligned) */}
                     <h3
-                      className={`text-sm md:text-base font-bold leading-snug flex-1 transition-colors ${
+                      className={`text-xs sm:text-sm lg:text-base font-bold leading-snug sm:leading-relaxed flex-1 transition-colors ${
                         isExpanded ? 'text-[#1A3B6B]' : 'text-gray-800'
                       }`}
                     >
@@ -323,9 +343,9 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
                   <div className="flex items-center gap-1 shrink-0 text-gray-400">
                     {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-[#1A3B6B]" />
+                      <ChevronUp className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-[#1A3B6B]" />
                     ) : (
-                      <ChevronDown className="w-5 h-5" />
+                      <ChevronDown className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                     )}
                   </div>
                 </div>

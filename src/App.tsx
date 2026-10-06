@@ -37,14 +37,20 @@ function MainApp() {
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
-  // Helper to detect hardcoded mock/sample IDs that should not appear
+  // Helper to detect hardcoded mock/sample IDs that should not appear (only admin data preserved)
   const isMockItem = (id?: string) => {
     if (!id) return true;
+    const lower = id.toLowerCase();
     return (
-      /^faq-[1-8]$/.test(id) ||
-      /^doc-[1-6]$/.test(id) ||
-      /^sch-(spring|summer|fall|winter|2025|2026)/.test(id) ||
-      /^inq-sample-/.test(id)
+      /^faq-[1-8]$/.test(lower) ||
+      /^doc-[1-6]$/.test(lower) ||
+      /^sch-(spring|summer|fall|winter|2025|2026)/.test(lower) ||
+      /^inq-sample-/.test(lower) ||
+      /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
+      lower.startsWith('mock') ||
+      lower.startsWith('sample') ||
+      lower.startsWith('example') ||
+      lower.startsWith('demo')
     );
   };
 

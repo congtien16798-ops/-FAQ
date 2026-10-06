@@ -164,6 +164,8 @@ export const initialSiteConfig: SiteConfig = {
     '외국인 유학생 아르바이트(시간제 취업) 가능한가요?',
     '국제처 행정실(동영관 101호) 위치와 운영시간은?',
   ],
+  chatbotNoMatchMsg: '문의하신 내용과 일치하는 공식 FAQ 및 행정 등록 정보가 현재 없습니다. 정확한 안내를 위해 담당 선생님께 1:1 빠른 문의를 남겨주시면 신속히 답변해 드리겠습니다.',
+  chatbotShowInquiryOnNoMatch: true,
   // 1:1 Quick Inquiry Settings Defaults
   inquiryEnabled: true,
   inquiryTitle: '1:1 빠른 문의 접수',

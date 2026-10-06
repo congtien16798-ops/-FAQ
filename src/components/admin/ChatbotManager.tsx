@@ -36,6 +36,13 @@ export const ChatbotManager: React.FC = () => {
     config.chatbotPlaceholder || '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)'
   );
   const [botColor, setBotColor] = useState(config.chatbotColor || config.mainColor || '#1A3B6B');
+  const [noMatchMsg, setNoMatchMsg] = useState(
+    config.chatbotNoMatchMsg ||
+      '문의하신 내용과 일치하는 공식 FAQ 및 행정 등록 정보가 현재 없습니다. 정확한 안내를 위해 담당 선생님께 1:1 빠른 문의를 남겨주시면 신속히 답변해 드리겠습니다.'
+  );
+  const [showInquiryOnNoMatch, setShowInquiryOnNoMatch] = useState(
+    config.chatbotShowInquiryOnNoMatch !== false
+  );
   const [suggestions, setSuggestions] = useState<string[]>(
     config.chatbotSuggestions || [
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',
@@ -70,6 +77,8 @@ export const ChatbotManager: React.FC = () => {
     if (config.chatbotWelcomeMsg) setWelcomeMsg(config.chatbotWelcomeMsg);
     if (config.chatbotPlaceholder) setPlaceholder(config.chatbotPlaceholder);
     if (config.chatbotColor) setBotColor(config.chatbotColor);
+    if (config.chatbotNoMatchMsg) setNoMatchMsg(config.chatbotNoMatchMsg);
+    if (config.chatbotShowInquiryOnNoMatch !== undefined) setShowInquiryOnNoMatch(config.chatbotShowInquiryOnNoMatch);
     if (config.chatbotSuggestions) setSuggestions(config.chatbotSuggestions);
   }, [config]);
 
@@ -150,6 +159,8 @@ export const ChatbotManager: React.FC = () => {
     );
     setPlaceholder('질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)');
     setBotColor(config.mainColor || '#1A3B6B');
+    setNoMatchMsg('문의하신 내용과 일치하는 공식 FAQ 및 행정 등록 정보가 현재 없습니다. 정확한 안내를 위해 담당 선생님께 1:1 빠른 문의를 남겨주시면 신속히 답변해 드리겠습니다.');
+    setShowInquiryOnNoMatch(true);
     setSuggestions([
       'D-4 비자 연장에 필요한 서류는 무엇인가요?',
       '수료 및 비자 연장을 위한 최소 출석률은?',
@@ -170,6 +181,8 @@ export const ChatbotManager: React.FC = () => {
         chatbotWelcomeMsg: welcomeMsg.trim(),
         chatbotPlaceholder: placeholder.trim(),
         chatbotColor: botColor,
+        chatbotNoMatchMsg: noMatchMsg.trim(),
+        chatbotShowInquiryOnNoMatch: showInquiryOnNoMatch,
         chatbotSuggestions: suggestions,
       });
 
@@ -259,7 +272,7 @@ export const ChatbotManager: React.FC = () => {
                 챗봇 활성화 상태
               </span>
               <span className="text-[11px] text-gray-500">
-                학생 포털 화면 우측 하단에 AI 챗봇 상담 플로팅 버튼을 표시합니다.
+                학생 포털 화면 우측 하단에 등록정보 안내 챗봇 플로팅 버튼을 표시합니다.
               </span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
@@ -289,7 +302,7 @@ export const ChatbotManager: React.FC = () => {
                   type="text"
                   value={botName}
                   onChange={(e) => setBotName(e.target.value)}
-                  placeholder="예: 계명어학당 AI 챗봇"
+                  placeholder="예: 계명어학당 안내 챗봇"
                   className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
                 />
               </div>
@@ -302,7 +315,7 @@ export const ChatbotManager: React.FC = () => {
                   type="text"
                   value={botSubtitle}
                   onChange={(e) => setBotSubtitle(e.target.value)}
-                  placeholder="예: 24시간 유학생 실시간 상담"
+                  placeholder="예: 24시간 등록정보 실시간 안내"
                   className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
                 />
               </div>
@@ -316,7 +329,7 @@ export const ChatbotManager: React.FC = () => {
                 type="text"
                 value={badgeText}
                 onChange={(e) => setBadgeText(e.target.value)}
-                placeholder="예: AI 가이드 챗봇"
+                placeholder="예: 등록 정보 실시간 안내"
                 className="w-full px-3 py-1.5 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B]"
               />
             </div>
@@ -469,6 +482,50 @@ export const ChatbotManager: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Section 5: Unmatched Query Guidance & 1:1 Inquiry Integration */}
+          <div className="space-y-3.5 p-4 rounded-lg border border-gray-200 bg-white">
+            <h4 className="font-bold text-xs text-gray-900 flex items-center gap-1.5 pb-2 border-b border-gray-100">
+              <HelpCircle className="w-4 h-4 text-[#2E7D5B]" />
+              <span>미등록 질문 응답 및 1:1 빠른 문의 연동 (등록 정보 기반 원칙)</span>
+            </h4>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                일치하는 FAQ/자료가 없을 때의 안내 문구*
+              </label>
+              <textarea
+                rows={2}
+                value={noMatchMsg}
+                onChange={(e) => setNoMatchMsg(e.target.value)}
+                placeholder="등록된 게시글이나 일정 중에 일치하는 정보가 없을 때 학생에게 보여줄 안내문"
+                className="w-full px-3 py-2 text-xs rounded border border-gray-300 focus:outline-none focus:border-[#1A3B6B] leading-relaxed"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                AI 환각이나 임의 답변을 방지하며, 관리자님이 작성하신 이 안내문이 다국어로 자동 번역되어 전달됩니다.
+              </p>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded border border-gray-200 flex items-center justify-between">
+              <div>
+                <span className="font-bold text-xs text-gray-900 block">
+                  1:1 빠른 문의 바로가기 버튼 제공
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  일치하는 정보가 없을 때 대화창 내에 [1:1 빠른 문의 바로 접수하기] 버튼을 표시합니다.
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={showInquiryOnNoMatch}
+                  onChange={(e) => setShowInquiryOnNoMatch(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2E7D5B]"></div>
+              </label>
+            </div>
+          </div>
         </div>
 
         {/* RIGHT COLUMN: Auto-Translation Preview & Live Chatbot Mockup */}
@@ -534,8 +591,8 @@ export const ChatbotManager: React.FC = () => {
                         ? translatedData.name
                         : botName}
                     </span>
-                    <span className="text-[9px] bg-amber-400 text-slate-900 font-extrabold px-1 py-0.2 rounded-full">
-                      AI
+                    <span className="text-[9px] bg-emerald-400 text-slate-900 font-extrabold px-1.5 py-0.2 rounded-full">
+                      등록정보 기반
                     </span>
                   </div>
                   <div className="text-[10px] text-blue-200 flex items-center gap-1">

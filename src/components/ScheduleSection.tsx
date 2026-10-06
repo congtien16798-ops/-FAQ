@@ -122,19 +122,29 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
 
     let isMounted = true;
     const translateAll = async () => {
-      const map: Record<string, { title: string; desc: string }> = {};
-      for (const ev of schedules) {
-        if (!ev) continue;
-        const transTitle = ev.titleEn && currentLang === 'en'
-          ? ev.titleEn
-          : await translateText(ev.title, currentLang, 'ko');
-        const transDesc = ev.description
-          ? await translateText(ev.description, currentLang, 'ko')
-          : '';
-        map[ev.id] = { title: transTitle, desc: transDesc };
-      }
-      if (isMounted) {
-        setTranslatedMap(map);
+      try {
+        const validSchedules = (schedules || []).filter(Boolean);
+        const results = await Promise.all(
+          validSchedules.map(async (ev) => {
+            const transTitle = ev.titleEn && currentLang === 'en'
+              ? ev.titleEn
+              : await translateText(ev.title || '', currentLang, 'ko');
+            const transDesc = ev.description
+              ? await translateText(ev.description, currentLang, 'ko')
+              : '';
+            return { id: ev.id, title: transTitle, desc: transDesc };
+          })
+        );
+
+        if (isMounted) {
+          const map: Record<string, { title: string; desc: string }> = {};
+          results.forEach((r) => {
+            map[r.id] = { title: r.title, desc: r.desc };
+          });
+          setTranslatedMap(map);
+        }
+      } catch (err) {
+        console.warn('Schedule translation error:', err);
       }
     };
 
@@ -208,16 +218,16 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
   const currentTermInfo = SEMESTER_TABS.find((t) => t.id === selectedTerm) || SEMESTER_TABS[0];
 
   return (
-    <section className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
+    <section className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-7 lg:py-8">
       {/* Header & Term Filters */}
-      <div className="w-full mb-6 pb-4 border-b border-[#E2E5E8]">
+      <div className="w-full mb-5 sm:mb-6 pb-3.5 sm:pb-4 border-b border-[#E2E5E8]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Left: Title & Note */}
           <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-            <h2 className="text-xl font-bold text-[#1A3B6B] shrink-0">
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-[#1A3B6B] shrink-0">
               {t.scheduleTitle || '한국어학당 일정'}
             </h2>
-            <span className="text-xs text-gray-400 hidden md:inline">
+            <span className="text-[11px] sm:text-xs text-gray-400 hidden md:inline">
               * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
             </span>
           </div>
@@ -233,7 +243,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   setSelectedYear(Number(e.target.value));
                   setHasUserManuallySelected(true);
                 }}
-                className="appearance-none pl-3 pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
+                className="appearance-none pl-2.5 sm:pl-3 pr-7 sm:pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-[11px] sm:text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
               >
                 {availableYears.map((yr) => (
                   <option key={yr} value={yr}>
@@ -253,7 +263,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   setSelectedTerm(e.target.value as ScheduleTerm);
                   setHasUserManuallySelected(true);
                 }}
-                className="appearance-none pl-3 pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
+                className="appearance-none pl-2.5 sm:pl-3 pr-7 sm:pr-8 py-1.5 sm:py-2 bg-white hover:bg-gray-50 focus:bg-white border border-gray-200 focus:border-[#1A3B6B] rounded-full text-[11px] sm:text-xs font-semibold text-gray-800 cursor-pointer shadow-2xs focus:outline-hidden focus:ring-1 focus:ring-[#1A3B6B]"
               >
                 {SEMESTER_TABS.map((sem) => (
                   <option key={sem.id} value={sem.id}>
@@ -267,7 +277,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
         </div>
 
         {/* Small Screen Note */}
-        <p className="text-xs text-gray-400 mt-2 md:hidden">
+        <p className="text-[11px] text-gray-400 mt-2 md:hidden">
           * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
         </p>
       </div>
@@ -293,18 +303,18 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                 className="bg-white rounded-md border border-[#E2E5E8] hover:border-gray-300 transition-all shadow-2xs overflow-hidden cursor-pointer group"
               >
                 {/* Header Row (Unified with FAQ standard) */}
-                <div className="px-4 py-3.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
-                    {/* Date: MM-DD (Bold, same font size as title, center aligned) */}
-                    <span className="text-sm md:text-base font-bold shrink-0 text-gray-900 tracking-tight">
+                <div className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    {/* Date: MM-DD (Bold, responsive size, center aligned) */}
+                    <span className="text-xs sm:text-sm lg:text-base font-bold shrink-0 text-gray-900 tracking-tight">
                       {formatEventDateDisplay(ev.startDate, ev.endDate)}
                     </span>
 
                     {/* Semi-transparent Divider Line (반투명 구분선) */}
-                    <span className="w-px h-3.5 sm:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
+                    <span className="w-px h-3 sm:h-3.5 lg:h-4 bg-gray-300/80 shrink-0" aria-hidden="true" />
 
-                    {/* Schedule Title (Bold, same font size as date, center aligned) */}
-                    <h4 className="text-sm md:text-base font-bold text-gray-800 group-hover:text-[#1A3B6B] transition-colors leading-snug flex-1 truncate sm:whitespace-normal">
+                    {/* Schedule Title (Bold, responsive size, center aligned) */}
+                    <h4 className="text-xs sm:text-sm lg:text-base font-bold text-gray-800 group-hover:text-[#1A3B6B] transition-colors leading-snug sm:leading-relaxed flex-1 truncate sm:whitespace-normal">
                       {getEventTitle(ev)}
                     </h4>
 
@@ -338,7 +348,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
 
                 {/* Description Body if present */}
                 {getEventDesc(ev) && (
-                  <div className="px-4 pb-3.5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-600 leading-relaxed bg-[#fafafa]/50">
+                  <div className="px-3.5 sm:px-4.5 pb-3 sm:pb-3.5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-600 leading-relaxed bg-[#fafafa]/50">
                     <p className="line-clamp-2">{getEventDesc(ev)}</p>
                     {(ev.time || (ev.location && ev.location !== '-')) && (
                       <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-400 sm:hidden flex-wrap">
