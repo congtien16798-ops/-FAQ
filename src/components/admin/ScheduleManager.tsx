@@ -285,16 +285,17 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     const newList = schedules.filter((item) => item.id !== id);
     setSchedules(newList);
+    setDeleteTarget(null);
+    setConfirmPermanentTarget(null);
 
     try {
       localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
       await deleteDoc(doc(db, 'schedules', id));
+      showToast(`'${targetTitle}' 일정이 영구 삭제되었습니다.`);
     } catch (err) {
       console.warn('Remote delete error:', err);
+      showToast(`'${targetTitle}' 일정이 삭제되었습니다.`);
     }
-
-    setDeleteTarget(null);
-    showToast(`'${targetTitle}' 일정이 영구 삭제되었습니다.`);
   };
 
   // Move up / down
@@ -842,17 +843,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
               {/* Action 2: Permanent Delete */}
               <button
                 type="button"
-                onClick={() => {
-                  const target = deleteTarget;
-                  setDeleteTarget(null);
-                  setConfirmPermanentTarget(target);
-                }}
+                onClick={() => handlePermanentDelete(deleteTarget.id)}
                 className="w-full text-left p-3 rounded-lg border border-red-200 bg-red-50/70 hover:bg-red-100 transition-all flex items-start gap-3 cursor-pointer group"
               >
                 <Trash2 className="w-5 h-5 text-red-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                 <div>
-                  <div className="font-bold text-red-800 text-xs sm:text-sm">
-                    영구 삭제
+                  <div className="font-bold text-red-800 text-xs sm:text-sm flex items-center gap-1.5">
+                    <span>영구 삭제</span>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-red-200 text-red-900 rounded font-normal">복구 불가</span>
                   </div>
                   <div className="text-[11px] text-red-600 mt-0.5">
                     데이터베이스 및 목록에서 완전히 삭제하며 복구할 수 없습니다.

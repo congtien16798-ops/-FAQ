@@ -112,7 +112,7 @@ function MainApp() {
     localStorage.setItem('kmu_language', lang);
   };
 
-  // Real-time Firestore Listeners with reliable local-cache preservation
+  // Real-time Firestore Listeners
   useEffect(() => {
     // 1. Real-time FAQs Listener
     const unsubFaqs = onSnapshot(collection(db, 'faqs'), (snap) => {
@@ -134,41 +134,11 @@ function MainApp() {
         return 0;
       });
 
-      if (list.length > 0) {
-        setFaqs(list);
-        try {
-          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
-        } catch {
-          // ignore
-        }
-      } else {
-        // If Firestore returned 0 docs, preserve locally created posts and sync to Firestore
-        const cached = localStorage.getItem(LOCAL_FAQS_KEY);
-        if (cached) {
-          try {
-            const localList: FaqItem[] = JSON.parse(cached);
-            const valid = localList.filter((item) => !isMockItem(item?.id));
-            if (valid.length > 0) {
-              setFaqs(valid);
-              valid.forEach(async (item) => {
-                try {
-                  await safeSetDoc(doc(db, 'faqs', item.id), item);
-                } catch (e) {
-                  console.warn('Syncing local faq to firestore:', e);
-                }
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        setFaqs([]);
-        try {
-          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify([]));
-        } catch {
-          // ignore
-        }
+      setFaqs(list);
+      try {
+        localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
       }
     }, (err) => {
       console.warn('Real-time faqs listener error, using local fallback:', err);
@@ -194,40 +164,11 @@ function MainApp() {
         return 0;
       });
 
-      if (list.length > 0) {
-        setDocuments(list);
-        try {
-          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
-        } catch {
-          // ignore
-        }
-      } else {
-        const cached = localStorage.getItem(LOCAL_DOCS_KEY);
-        if (cached) {
-          try {
-            const localList: DocumentItem[] = JSON.parse(cached);
-            const valid = localList.filter((item) => !isMockItem(item?.id));
-            if (valid.length > 0) {
-              setDocuments(valid);
-              valid.forEach(async (item) => {
-                try {
-                  await safeSetDoc(doc(db, 'documents', item.id), item);
-                } catch (e) {
-                  console.warn('Syncing local document to firestore:', e);
-                }
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        setDocuments([]);
-        try {
-          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify([]));
-        } catch {
-          // ignore
-        }
+      setDocuments(list);
+      try {
+        localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
       }
     }, (err) => {
       console.warn('Real-time documents listener error, using local fallback:', err);
@@ -245,40 +186,12 @@ function MainApp() {
       });
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      if (list.length > 0) {
-        setInquiries(list);
-        try {
-          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
-        } catch {
-          // ignore
-        }
-      } else {
-        const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
-        if (cached) {
-          try {
-            const localList: InquiryItem[] = JSON.parse(cached);
-            const valid = localList.filter((item) => !isMockItem(item?.id));
-            if (valid.length > 0) {
-              setInquiries(valid);
-              valid.forEach(async (item) => {
-                try {
-                  await safeSetDoc(doc(db, 'inquiries', item.id), item);
-                } catch (e) {
-                  console.warn('Syncing local inquiry to firestore:', e);
-                }
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        setInquiries([]);
-        try {
-          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify([]));
-        } catch {
-          // ignore
-        }
+      setInquiries(list);
+      try {
+        localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
+        localStorage.setItem('kmu_inquiries_cache', JSON.stringify(list));
+      } catch {
+        // ignore
       }
     }, (err) => {
       console.warn('Real-time inquiries listener error:', err);
@@ -301,40 +214,11 @@ function MainApp() {
         return (a.startDate || '').localeCompare(b.startDate || '');
       });
 
-      if (list.length > 0) {
-        setSchedules(list);
-        try {
-          localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
-        } catch {
-          // ignore
-        }
-      } else {
-        const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
-        if (cached) {
-          try {
-            const localList: ScheduleEvent[] = JSON.parse(cached);
-            const valid = localList.filter((item) => !isMockItem(item?.id));
-            if (valid.length > 0) {
-              setSchedules(valid);
-              valid.forEach(async (item) => {
-                try {
-                  await safeSetDoc(doc(db, 'schedules', item.id), item);
-                } catch (e) {
-                  console.warn('Syncing local schedule to firestore:', e);
-                }
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        setSchedules([]);
-        try {
-          localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify([]));
-        } catch {
-          // ignore
-        }
+      setSchedules(list);
+      try {
+        localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
+      } catch {
+        // ignore
       }
     }, (err) => {
       console.warn('Real-time schedules listener error:', err);
