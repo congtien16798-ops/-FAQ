@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   CheckCircle2,
@@ -15,8 +15,8 @@ import {
   AlertTriangle,
   X
 } from 'lucide-react';
-import { doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db, safeSetDoc, safeUpdateDoc, handleFirestoreError, OperationType } from '../../firebase';
 import { InquiryItem, InquiryStatus, Language } from '../../types';
 import { translateText } from '../../services/translator';
 import { InquirySettings } from './InquirySettings';
@@ -50,6 +50,43 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     setAlertMsg(msg);
     setTimeout(() => setAlertMsg(null), 3000);
   };
+
+  // Auto-prune mock inquiries
+  useEffect(() => {
+    if (!inquiries || inquiries.length === 0) return;
+    const isMock = (id?: string) => {
+      if (!id) return true;
+      const lower = id.toLowerCase();
+      return (
+        /^inq-sample-/.test(lower) ||
+        /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
+        lower.startsWith('mock') ||
+        lower.startsWith('sample') ||
+        lower.startsWith('example') ||
+        lower.startsWith('demo')
+      );
+    };
+
+    const mockInqs = inquiries.filter((i) => !i || isMock(i.id));
+    if (mockInqs.length > 0) {
+      const valid = inquiries.filter((i) => !mockInqs.includes(i));
+      setInquiries(valid);
+      try {
+        localStorage.setItem('kmu_inquiries', JSON.stringify(valid));
+      } catch {
+        // ignore
+      }
+      mockInqs.forEach(async (item) => {
+        if (item?.id) {
+          try {
+            await deleteDoc(doc(db, 'inquiries', item.id));
+          } catch {
+            // ignore
+          }
+        }
+      });
+    }
+  }, [inquiries, setInquiries]);
 
   const handleTranslateInquiry = async () => {
     if (!selectedInquiry) return;
@@ -107,8 +144,9 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     }
 
     try {
+      localStorage.setItem('kmu_inquiries', JSON.stringify(newInquiries));
       localStorage.setItem('kmu_inquiries_cache', JSON.stringify(newInquiries));
-      await setDoc(doc(db, 'inquiries', id), updated);
+      await safeSetDoc(doc(db, 'inquiries', id), updated);
     } catch (err) {
       console.warn('Inquiry visibility update warning:', err);
     }
@@ -130,24 +168,30 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     const timestamp = new Date().toISOString();
     const updated = { ...inq, status: nextStatus, updatedAt: timestamp };
 
+    const nextInquiries = inquiries.map((item) => (item.id === inq.id ? updated : item));
+    setInquiries(nextInquiries);
+    try {
+      localStorage.setItem('kmu_inquiries', JSON.stringify(nextInquiries));
+      localStorage.setItem('kmu_inquiries_cache', JSON.stringify(nextInquiries));
+    } catch {
+      // ignore
+    }
+    if (selectedInquiry?.id === inq.id) {
+      setSelectedInquiry(updated);
+    }
+
     try {
       try {
-        await updateDoc(doc(db, 'inquiries', inq.id), {
+        await safeUpdateDoc(doc(db, 'inquiries', inq.id), {
           status: nextStatus,
           updatedAt: timestamp,
         });
       } catch (fbErr) {
         handleFirestoreError(fbErr, OperationType.UPDATE, `inquiries/${inq.id}`);
       }
-
-      setInquiries((prev) => prev.map((item) => (item.id === inq.id ? updated : item)));
-      if (selectedInquiry?.id === inq.id) {
-        setSelectedInquiry(updated);
-      }
       showToast(`상태가 '${nextStatus === 'resolved' ? '확인완료' : '접수됨'}'으로 변경되었습니다.`);
     } catch (err) {
       console.error('Toggle status error:', err);
-      setInquiries((prev) => prev.map((item) => (item.id === inq.id ? updated : item)));
     }
   };
 
@@ -157,22 +201,28 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     const timestamp = new Date().toISOString();
     const updated = { ...selectedInquiry, adminNote, updatedAt: timestamp };
 
+    const nextInquiries = inquiries.map((item) => (item.id === selectedInquiry.id ? updated : item));
+    setInquiries(nextInquiries);
+    setSelectedInquiry(updated);
+    try {
+      localStorage.setItem('kmu_inquiries', JSON.stringify(nextInquiries));
+      localStorage.setItem('kmu_inquiries_cache', JSON.stringify(nextInquiries));
+    } catch {
+      // ignore
+    }
+
     try {
       try {
-        await updateDoc(doc(db, 'inquiries', selectedInquiry.id), {
+        await safeUpdateDoc(doc(db, 'inquiries', selectedInquiry.id), {
           adminNote,
           updatedAt: timestamp,
         });
       } catch (fbErr) {
         handleFirestoreError(fbErr, OperationType.UPDATE, `inquiries/${selectedInquiry.id}`);
       }
-
-      setInquiries((prev) => prev.map((item) => (item.id === selectedInquiry.id ? updated : item)));
-      setSelectedInquiry(updated);
       showToast('담당자 메모가 저장되었습니다.');
     } catch (err) {
       console.error('Save note error:', err);
-      setInquiries((prev) => prev.map((item) => (item.id === selectedInquiry.id ? updated : item)));
     }
   };
 

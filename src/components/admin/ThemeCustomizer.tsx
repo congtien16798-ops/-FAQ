@@ -2425,7 +2425,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={draftConfig.chatbotSubtitle || '24시간 유학생 실시간 상담'}
+                    value={draftConfig.chatbotSubtitle || '등록 정보 기반 실시간 안내'}
                     onChange={(e) => updateDraft({ chatbotSubtitle: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white"
                   />
@@ -2439,7 +2439,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     rows={3}
                     value={
                       draftConfig.chatbotWelcomeMsg ||
-                      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\nD-4 비자 연장 서류, 최소 출석률 기준(80% 이상), 기숙사 외박 신청, 행정실 위치 등 무엇이든 물어보세요!'
+                      '안녕하세요! 계명대학교 한국어학당 안내 챗봇입니다. 🎓\n관리자가 등록한 자주 묻는 질문(FAQ), 행정 서식 자료, 한국어학당 학사일정을 바탕으로 정확하게 안내해 드립니다. 궁금한 점을 질문해 보세요!'
                     }
                     onChange={(e) => updateDraft({ chatbotWelcomeMsg: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white leading-relaxed text-xs"
@@ -2454,7 +2454,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                     type="text"
                     value={
                       draftConfig.chatbotPlaceholder ||
-                      '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준)'
+                      '질문을 입력하세요... (예: D-4 연장 서류, 출석률 기준, 일정)'
                     }
                     onChange={(e) => updateDraft({ chatbotPlaceholder: e.target.value })}
                     className="w-full px-2.5 py-1.5 rounded border border-gray-300 bg-white"

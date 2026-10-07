@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Send, CheckCircle2, AlertCircle, RefreshCw, Clock, MapPin, Phone } from 'lucide-react';
-import { collection, doc, setDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, doc } from 'firebase/firestore';
+import { db, safeSetDoc, handleFirestoreError, OperationType } from '../firebase';
 import { Language, InquiryItem, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
@@ -269,7 +269,7 @@ export const InquirySection: React.FC<InquirySectionProps> = ({
     try {
       // Save to Firestore
       try {
-        await setDoc(doc(db, 'inquiries', newId), newInquiry);
+        await safeSetDoc(doc(db, 'inquiries', newId), newInquiry);
       } catch (fbErr) {
         handleFirestoreError(fbErr, OperationType.CREATE, `inquiries/${newId}`);
       }

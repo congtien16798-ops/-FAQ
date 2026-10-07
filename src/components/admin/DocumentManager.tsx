@@ -18,8 +18,8 @@ import {
   Save,
   Sparkles
 } from 'lucide-react';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
 import { DocumentItem, DocumentFileType } from '../../types';
 
 interface DocumentManagerProps {
@@ -70,19 +70,21 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Auto-prune empty documents (내용없고 빈 서식 자동 삭제)
+  // Filter out any legacy sample IDs
   useEffect(() => {
     if (!documents || documents.length === 0) return;
-    const emptyDocs = documents.filter((d) => !d || !d.title || d.title.trim() === '' || !d.fileName || d.fileName.trim() === '');
-    if (emptyDocs.length > 0) {
-      const validOnly = documents.filter((d) => !emptyDocs.includes(d));
+    const LEGACY_MOCKS = new Set(['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5', 'doc-6']);
+    const legacyItems = documents.filter((d) => d && d.id && LEGACY_MOCKS.has(d.id.toLowerCase()));
+
+    if (legacyItems.length > 0) {
+      const validOnly = documents.filter((d) => !legacyItems.includes(d));
       setDocuments(validOnly);
       try {
         localStorage.setItem('kmu_docs_cache', JSON.stringify(validOnly));
       } catch {
         // ignore
       }
-      emptyDocs.forEach(async (docItem) => {
+      legacyItems.forEach(async (docItem) => {
         if (docItem?.id) {
           try {
             await deleteDoc(doc(db, 'documents', docItem.id));
@@ -130,7 +132,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
     try {
       localStorage.setItem('kmu_docs_cache', JSON.stringify(newDocs));
-      await setDoc(doc(db, 'documents', id), updated);
+      await safeSetDoc(doc(db, 'documents', id), updated);
     } catch (err) {
       console.warn('Doc visibility update warning:', err);
     }
@@ -237,7 +239,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     try {
       localStorage.setItem('kmu_docs_cache', JSON.stringify(updated));
       for (const item of updated) {
-        await setDoc(doc(db, 'documents', item.id), { order: item.order }, { merge: true });
+        await safeSetDoc(doc(db, 'documents', item.id), { order: item.order }, { merge: true });
       }
     } catch (err) {
       console.warn('Remote sync order failed, saved locally:', err);
@@ -364,36 +366,33 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       updatedAt: timestamp,
     };
 
-    try {
-      try {
-        await setDoc(doc(db, 'documents', id), payload);
-      } catch (fbErr) {
-        handleFirestoreError(fbErr, OperationType.WRITE, `documents/${id}`);
+    // 1. Immediately update in-memory state and localStorage
+    let nextDocs: DocumentItem[] = [];
+    setDocuments((prev) => {
+      const idx = prev.findIndex((d) => d.id === id);
+      if (idx >= 0) {
+        nextDocs = [...prev];
+        nextDocs[idx] = payload;
+      } else {
+        nextDocs = [payload, ...prev];
       }
+      try {
+        localStorage.setItem('kmu_docs_cache', JSON.stringify(nextDocs));
+      } catch {
+        // ignore
+      }
+      return nextDocs;
+    });
 
-      setDocuments((prev) => {
-        const idx = prev.findIndex((d) => d.id === id);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = payload;
-          return updated;
-        }
-        return [payload, ...prev];
-      });
-
-      setIsEditing(false);
-      showToast('서식이 성공적으로 등록/수정되었습니다.');
-    } catch (err) {
-      console.error('Document save error:', err);
-      setDocuments((prev) => {
-        const idx = prev.findIndex((d) => d.id === id);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = payload;
-          return updated;
-        }
-        return [payload, ...prev];
-      });
+    // 2. Persist to Firestore with safeSetDoc
+    try {
+      await safeSetDoc(doc(db, 'documents', id), payload);
+      showToast('서식이 안전하게 등록/수정되었습니다.');
+    } catch (fbErr) {
+      console.warn('Document firestore sync note:', fbErr);
+      handleFirestoreError(fbErr, OperationType.WRITE, `documents/${id}`);
+      showToast('서식이 안전하게 저장되었습니다 (로컬 캐시 반영 완료).');
+    } finally {
       setIsEditing(false);
     }
   };

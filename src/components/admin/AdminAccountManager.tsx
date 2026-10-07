@@ -14,8 +14,8 @@ import {
   KeyRound,
   X
 } from 'lucide-react';
-import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { collection, doc, getDocs, deleteDoc } from 'firebase/firestore';
+import { db, safeSetDoc } from '../../firebase';
 import { useAuth, PRIMARY_ADMIN_EMAIL } from '../../context/AuthContext';
 
 export interface AdminAccountItem {
@@ -164,7 +164,7 @@ export const AdminAccountManager: React.FC = () => {
     };
 
     try {
-      await setDoc(doc(db, 'admins', docKey), newAdminData);
+      await safeSetDoc(doc(db, 'admins', docKey), newAdminData);
 
       const updated = [newAdminData, ...adminList];
       setAdminList(updated);

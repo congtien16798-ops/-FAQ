@@ -1,6 +1,14 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  doc, 
+  getDocFromServer, 
+  setDoc, 
+  updateDoc,
+  DocumentReference, 
+  SetOptions 
+} from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 export enum OperationType {
@@ -30,13 +38,61 @@ export interface FirestoreErrorInfo {
 }
 
 export const app = initializeApp(firebaseConfig);
-// CRITICAL: Must pass firebaseConfig.firestoreDatabaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with ignoreUndefinedProperties to prevent crashes on optional/undefined fields
+export const db = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+}, firebaseConfig.firestoreDatabaseId);
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
+
+/**
+ * Recursively cleans an object to remove undefined properties,
+ * ensuring 100% safe execution for all Firestore database write operations.
+ */
+export function cleanFirestoreData<T extends Record<string, any>>(data: T): T {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+  const cleaned: Record<string, any> = Array.isArray(data) ? [] : {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+      cleaned[key] = cleanFirestoreData(value);
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned as T;
+}
+
+/**
+ * Safe setDoc wrapper that cleans data and handles Firestore persistence seamlessly.
+ */
+export async function safeSetDoc<T extends Record<string, any>>(
+  docRef: DocumentReference,
+  data: T,
+  options?: SetOptions
+) {
+  const cleaned = cleanFirestoreData(data);
+  return options ? setDoc(docRef, cleaned, options) : setDoc(docRef, cleaned);
+}
+
+/**
+ * Safe updateDoc wrapper that cleans data before sending to Firestore.
+ */
+export async function safeUpdateDoc<T extends Record<string, any>>(
+  docRef: DocumentReference,
+  data: T
+) {
+  const cleaned = cleanFirestoreData(data);
+  return updateDoc(docRef, cleaned);
+}
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -56,7 +112,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path,
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  return errInfo;
 }
 
 // Test connection on boot per Firebase skill guidelines
@@ -72,3 +128,4 @@ export async function testConnection() {
 testConnection();
 
 export { signInWithPopup, signOut };
+

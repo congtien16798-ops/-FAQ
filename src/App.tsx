@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
+import { db, safeSetDoc } from './firebase';
 import { Language, FaqItem, DocumentItem, InquiryItem, ScheduleEvent, FaqCategory } from './types';
 import { initialFaqs, initialDocuments } from './constants/initialData';
 import { INITIAL_SCHEDULES } from './constants/initialSchedules';
@@ -25,6 +25,13 @@ const LOCAL_DOCS_KEY = 'kmu_docs_cache';
 const LOCAL_INQUIRIES_KEY = 'kmu_inquiries';
 const LOCAL_SCHEDULES_KEY = 'kmu_schedules_cache';
 
+const LEGACY_MOCK_IDS = new Set([
+  'faq-1', 'faq-2', 'faq-3', 'faq-4', 'faq-5', 'faq-6', 'faq-7', 'faq-8',
+  'doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5', 'doc-6',
+  'sch-spring-1', 'sch-summer-1', 'sch-fall-1', 'sch-winter-1',
+  'inq-sample-1', 'inq-sample-2',
+]);
+
 function MainApp() {
   const [currentLang, setCurrentLang] = useState<Language>(() => {
     return (localStorage.getItem('kmu_language') as Language) || 'ko';
@@ -37,24 +44,13 @@ function MainApp() {
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
-  // Helper to detect hardcoded mock/sample IDs that should not appear (only admin data preserved)
+  // Helper to detect specific hardcoded legacy mock IDs only
   const isMockItem = (id?: string) => {
-    if (!id) return true;
-    const lower = id.toLowerCase();
-    return (
-      /^faq-[1-8]$/.test(lower) ||
-      /^doc-[1-6]$/.test(lower) ||
-      /^sch-(spring|summer|fall|winter|2025|2026)/.test(lower) ||
-      /^inq-sample-/.test(lower) ||
-      /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
-      lower.startsWith('mock') ||
-      lower.startsWith('sample') ||
-      lower.startsWith('example') ||
-      lower.startsWith('demo')
-    );
+    if (!id) return false;
+    return LEGACY_MOCK_IDS.has(id.toLowerCase());
   };
 
-  // FAQs State: defaults to clean empty array if no admin data exists
+  // FAQs State: defaults to local cache or clean empty array
   const [faqs, setFaqs] = useState<FaqItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_FAQS_KEY);
@@ -68,7 +64,7 @@ function MainApp() {
     }
   });
 
-  // Documents State: defaults to clean empty array
+  // Documents State: defaults to local cache or clean empty array
   const [documents, setDocuments] = useState<DocumentItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_DOCS_KEY);
@@ -82,7 +78,7 @@ function MainApp() {
     }
   });
 
-  // Inquiries State: clean initial state with zero mock records
+  // Inquiries State: defaults to local cache or clean empty array
   const [inquiries, setInquiries] = useState<InquiryItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
@@ -96,7 +92,7 @@ function MainApp() {
     return [];
   });
 
-  // Schedules State: clean initial state
+  // Schedules State: defaults to local cache or clean empty array
   const [schedules, setSchedules] = useState<ScheduleEvent[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
@@ -116,28 +112,17 @@ function MainApp() {
     localStorage.setItem('kmu_language', lang);
   };
 
-  // Real-time Firestore Listeners with automatic cleanup of empty posts and mock examples
+  // Real-time Firestore Listeners with reliable local-cache preservation
   useEffect(() => {
-    // 1. Real-time FAQs Listener & Auto-Pruning
+    // 1. Real-time FAQs Listener
     const unsubFaqs = onSnapshot(collection(db, 'faqs'), (snap) => {
       const list: FaqItem[] = [];
-      const emptyIds: string[] = [];
-      const mockIds: string[] = [];
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         const item = { ...data, id: data.id || docSnap.id } as FaqItem;
-        if (isMockItem(item.id)) {
-          mockIds.push(item.id);
-          return;
-        }
-        const hasTitle = !!item.title && item.title.trim() !== '';
-        const plainContent = (item.content || '').replace(/<[^>]*>/g, '').trim();
-        const hasContent = plainContent !== '' || !!item.imageUrl || (item.content || '').includes('<img');
-
-        if (!hasTitle || !hasContent) {
-          emptyIds.push(item.id);
-        } else {
+        if (isMockItem(item.id)) return;
+        if (item.title && item.title.trim() !== '') {
           list.push(item);
         }
       });
@@ -149,44 +134,55 @@ function MainApp() {
         return 0;
       });
 
-      setFaqs(list);
-      try {
-        localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
-      } catch {
-        // ignore
-      }
-
-      // Auto delete empty or mock posts from Firestore
-      [...emptyIds, ...mockIds].forEach(async (id) => {
+      if (list.length > 0) {
+        setFaqs(list);
         try {
-          await deleteDoc(doc(db, 'faqs', id));
+          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
         } catch {
           // ignore
         }
-      });
+      } else {
+        // If Firestore returned 0 docs, preserve locally created posts and sync to Firestore
+        const cached = localStorage.getItem(LOCAL_FAQS_KEY);
+        if (cached) {
+          try {
+            const localList: FaqItem[] = JSON.parse(cached);
+            const valid = localList.filter((item) => !isMockItem(item?.id));
+            if (valid.length > 0) {
+              setFaqs(valid);
+              valid.forEach(async (item) => {
+                try {
+                  await safeSetDoc(doc(db, 'faqs', item.id), item);
+                } catch (e) {
+                  console.warn('Syncing local faq to firestore:', e);
+                }
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setFaqs([]);
+        try {
+          localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify([]));
+        } catch {
+          // ignore
+        }
+      }
     }, (err) => {
       console.warn('Real-time faqs listener error, using local fallback:', err);
     });
 
-    // 2. Real-time Documents Listener & Auto-Pruning
+    // 2. Real-time Documents Listener
     const unsubDocs = onSnapshot(collection(db, 'documents'), (snap) => {
       const list: DocumentItem[] = [];
-      const emptyIds: string[] = [];
-      const mockIds: string[] = [];
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         const item = { ...data, id: data.id || docSnap.id } as DocumentItem;
-        if (isMockItem(item.id)) {
-          mockIds.push(item.id);
-          return;
-        }
-        const hasTitle = !!item.title && item.title.trim() !== '';
-        const hasFile = !!item.fileName && item.fileName.trim() !== '';
-
-        if (!hasTitle || !hasFile) {
-          emptyIds.push(item.id);
-        } else {
+        if (isMockItem(item.id)) return;
+        if (item.title && item.title.trim() !== '') {
           list.push(item);
         }
       });
@@ -198,20 +194,41 @@ function MainApp() {
         return 0;
       });
 
-      setDocuments(list);
-      try {
-        localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
-      } catch {
-        // ignore
-      }
-
-      [...emptyIds, ...mockIds].forEach(async (id) => {
+      if (list.length > 0) {
+        setDocuments(list);
         try {
-          await deleteDoc(doc(db, 'documents', id));
+          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
         } catch {
           // ignore
         }
-      });
+      } else {
+        const cached = localStorage.getItem(LOCAL_DOCS_KEY);
+        if (cached) {
+          try {
+            const localList: DocumentItem[] = JSON.parse(cached);
+            const valid = localList.filter((item) => !isMockItem(item?.id));
+            if (valid.length > 0) {
+              setDocuments(valid);
+              valid.forEach(async (item) => {
+                try {
+                  await safeSetDoc(doc(db, 'documents', item.id), item);
+                } catch (e) {
+                  console.warn('Syncing local document to firestore:', e);
+                }
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setDocuments([]);
+        try {
+          localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify([]));
+        } catch {
+          // ignore
+        }
+      }
     }, (err) => {
       console.warn('Real-time documents listener error, using local fallback:', err);
     });
@@ -219,32 +236,50 @@ function MainApp() {
     // 3. Real-time Inquiries Listener
     const unsubInquiries = onSnapshot(collection(db, 'inquiries'), (snap) => {
       const list: InquiryItem[] = [];
-      const mockIds: string[] = [];
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         const item = { ...data, id: data.id || docSnap.id } as InquiryItem;
-        if (isMockItem(item.id)) {
-          mockIds.push(item.id);
-          return;
-        }
+        if (isMockItem(item.id)) return;
         list.push(item);
       });
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setInquiries(list);
-      try {
-        localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
-      } catch {
-        // ignore
-      }
 
-      mockIds.forEach(async (id) => {
+      if (list.length > 0) {
+        setInquiries(list);
         try {
-          await deleteDoc(doc(db, 'inquiries', id));
+          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
         } catch {
           // ignore
         }
-      });
+      } else {
+        const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
+        if (cached) {
+          try {
+            const localList: InquiryItem[] = JSON.parse(cached);
+            const valid = localList.filter((item) => !isMockItem(item?.id));
+            if (valid.length > 0) {
+              setInquiries(valid);
+              valid.forEach(async (item) => {
+                try {
+                  await safeSetDoc(doc(db, 'inquiries', item.id), item);
+                } catch (e) {
+                  console.warn('Syncing local inquiry to firestore:', e);
+                }
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setInquiries([]);
+        try {
+          localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify([]));
+        } catch {
+          // ignore
+        }
+      }
     }, (err) => {
       console.warn('Real-time inquiries listener error:', err);
     });
@@ -252,35 +287,55 @@ function MainApp() {
     // 4. Real-time Schedules Listener
     const unsubSchedules = onSnapshot(collection(db, 'schedules'), (snap) => {
       const list: ScheduleEvent[] = [];
-      const mockIds: string[] = [];
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
         const item = { ...data, id: data.id || docSnap.id } as ScheduleEvent;
-        if (isMockItem(item.id)) {
-          mockIds.push(item.id);
-          return;
+        if (isMockItem(item.id)) return;
+        if (item.title && item.title.trim() !== '') {
+          list.push(item);
         }
-        list.push(item);
       });
       list.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-        return a.startDate.localeCompare(b.startDate);
+        return (a.startDate || '').localeCompare(b.startDate || '');
       });
-      setSchedules(list);
-      try {
-        localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
-      } catch {
-        // ignore
-      }
 
-      mockIds.forEach(async (id) => {
+      if (list.length > 0) {
+        setSchedules(list);
         try {
-          await deleteDoc(doc(db, 'schedules', id));
+          localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
         } catch {
           // ignore
         }
-      });
+      } else {
+        const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
+        if (cached) {
+          try {
+            const localList: ScheduleEvent[] = JSON.parse(cached);
+            const valid = localList.filter((item) => !isMockItem(item?.id));
+            if (valid.length > 0) {
+              setSchedules(valid);
+              valid.forEach(async (item) => {
+                try {
+                  await safeSetDoc(doc(db, 'schedules', item.id), item);
+                } catch (e) {
+                  console.warn('Syncing local schedule to firestore:', e);
+                }
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        setSchedules([]);
+        try {
+          localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify([]));
+        } catch {
+          // ignore
+        }
+      }
     }, (err) => {
       console.warn('Real-time schedules listener error:', err);
     });

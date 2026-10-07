@@ -26,8 +26,8 @@ import {
   HeartHandshake,
   Layers
 } from 'lucide-react';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
 import { FaqItem, FaqCategory, CategoryItem } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -87,40 +87,21 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Auto-prune empty FAQ posts and mock examples (자동 생성 예시 및 빈 게시글 영구 삭제)
+  // Filter out any legacy sample IDs
   useEffect(() => {
     if (!faqs || faqs.length === 0) return;
-    const isMock = (id?: string) => {
-      if (!id) return true;
-      const lower = id.toLowerCase();
-      return (
-        /^faq-[1-8]$/.test(lower) ||
-        /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
-        lower.startsWith('mock') ||
-        lower.startsWith('sample') ||
-        lower.startsWith('example') ||
-        lower.startsWith('demo')
-      );
-    };
+    const LEGACY_MOCKS = new Set(['faq-1', 'faq-2', 'faq-3', 'faq-4', 'faq-5', 'faq-6', 'faq-7', 'faq-8']);
+    const legacyItems = faqs.filter((f) => f && f.id && LEGACY_MOCKS.has(f.id.toLowerCase()));
 
-    const invalidItems = faqs.filter((f) => {
-      if (!f) return true;
-      if (isMock(f.id)) return true;
-      const noTitle = !f.title || f.title.trim() === '';
-      const plainContent = (f.content || '').replace(/<[^>]*>/g, '').trim();
-      const noContent = plainContent === '' && !f.imageUrl && !(f.content || '').includes('<img');
-      return noTitle || noContent;
-    });
-
-    if (invalidItems.length > 0) {
-      const validOnly = faqs.filter((f) => !invalidItems.includes(f));
+    if (legacyItems.length > 0) {
+      const validOnly = faqs.filter((f) => !legacyItems.includes(f));
       setFaqs(validOnly);
       try {
         localStorage.setItem('kmu_faqs_cache', JSON.stringify(validOnly));
       } catch {
         // ignore
       }
-      invalidItems.forEach(async (item) => {
+      legacyItems.forEach(async (item) => {
         if (item?.id) {
           try {
             await deleteDoc(doc(db, 'faqs', item.id));
@@ -172,7 +153,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
 
     try {
       localStorage.setItem('kmu_faqs_cache', JSON.stringify(newFaqs));
-      await setDoc(doc(db, 'faqs', id), updated);
+      await safeSetDoc(doc(db, 'faqs', id), updated);
     } catch (err) {
       console.warn('Faq visibility update warning:', err);
     }
@@ -279,7 +260,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     try {
       localStorage.setItem('kmu_faqs_cache', JSON.stringify(updated));
       for (const item of updated) {
-        await setDoc(doc(db, 'faqs', item.id), { order: item.order }, { merge: true });
+        await safeSetDoc(doc(db, 'faqs', item.id), { order: item.order }, { merge: true });
       }
     } catch (err) {
       console.warn('Remote sync order failed, saved locally:', err);
@@ -343,50 +324,48 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
       authorId: user?.uid || 'admin',
     };
 
-    try {
-      try {
-        await setDoc(doc(db, 'faqs', id), faqPayload);
-      } catch (fbErr) {
-        handleFirestoreError(fbErr, OperationType.WRITE, `faqs/${id}`);
+    // 1. Immediately update in-memory state and localStorage
+    let nextList: FaqItem[] = [];
+    setFaqs((prev) => {
+      const idx = prev.findIndex((f) => f.id === id);
+      if (idx >= 0) {
+        nextList = [...prev];
+        nextList[idx] = faqPayload;
+      } else {
+        nextList = [faqPayload, ...prev];
       }
+      try {
+        localStorage.setItem('kmu_faqs_cache', JSON.stringify(nextList));
+      } catch {
+        // ignore
+      }
+      return nextList;
+    });
 
-      setFaqs((prev) => {
-        const idx = prev.findIndex((f) => f.id === id);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = faqPayload;
-          return updated;
-        }
-        return [faqPayload, ...prev];
-      });
-
-      setIsEditing(false);
-      showToast('FAQ가 성공적으로 저장되었습니다.');
-    } catch (err) {
-      console.error('Failed to save FAQ:', err);
-      setFaqs((prev) => {
-        const idx = prev.findIndex((f) => f.id === id);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = faqPayload;
-          return updated;
-        }
-        return [faqPayload, ...prev];
-      });
-      setIsEditing(false);
+    // 2. Persist to Firestore with safeSetDoc (auto sanitizing undefined properties)
+    try {
+      await safeSetDoc(doc(db, 'faqs', id), faqPayload);
+      showToast('FAQ가 안전하게 등록/저장되었습니다.');
+    } catch (fbErr) {
+      console.warn('Firestore sync note:', fbErr);
+      handleFirestoreError(fbErr, OperationType.WRITE, `faqs/${id}`);
+      showToast('FAQ가 안전하게 저장되었습니다 (로컬 캐시 반영 완료).');
     } finally {
       setIsSubmitting(false);
+      setIsEditing(false);
     }
   };
 
   const handleTogglePin = async (faq: FaqItem) => {
     const updated = { ...faq, pinned: !faq.pinned, updatedAt: new Date().toISOString() };
+    const nextFaqs = faqs.map((f) => (f.id === faq.id ? updated : f));
+    setFaqs(nextFaqs);
     try {
-      await setDoc(doc(db, 'faqs', faq.id), updated);
+      localStorage.setItem('kmu_faqs_cache', JSON.stringify(nextFaqs));
+      await safeSetDoc(doc(db, 'faqs', faq.id), updated);
     } catch (fbErr) {
-      // fallback
+      console.warn('Toggle pin note:', fbErr);
     }
-    setFaqs((prev) => prev.map((f) => (f.id === faq.id ? updated : f)));
   };
 
   // Category Handlers

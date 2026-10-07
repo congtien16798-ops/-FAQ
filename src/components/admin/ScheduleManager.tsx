@@ -20,8 +20,8 @@ import {
   EyeOff,
   AlertTriangle
 } from 'lucide-react';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db, safeSetDoc } from '../../firebase';
 import { ScheduleEvent, ScheduleTerm, ScheduleEventType, getScheduleYear } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -105,19 +105,21 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
-  // Auto-prune empty schedule items (내용 및 제목 없는 일정 자동 삭제)
+  // Filter out any legacy sample IDs
   useEffect(() => {
     if (!schedules || schedules.length === 0) return;
-    const emptyItems = schedules.filter((s) => !s || !s.title || s.title.trim() === '' || !s.startDate);
-    if (emptyItems.length > 0) {
-      const validOnly = schedules.filter((s) => !emptyItems.includes(s));
+    const LEGACY_MOCKS = new Set(['sch-spring-1', 'sch-summer-1', 'sch-fall-1', 'sch-winter-1']);
+    const legacyItems = schedules.filter((s) => s && s.id && LEGACY_MOCKS.has(s.id.toLowerCase()));
+
+    if (legacyItems.length > 0) {
+      const validOnly = schedules.filter((s) => !legacyItems.includes(s));
       setSchedules(validOnly);
       try {
         localStorage.setItem('kmu_schedules_cache', JSON.stringify(validOnly));
       } catch {
         // ignore
       }
-      emptyItems.forEach(async (ev) => {
+      legacyItems.forEach(async (ev) => {
         if (ev?.id) {
           try {
             await deleteDoc(doc(db, 'schedules', ev.id));
@@ -203,7 +205,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       setSchedules(newList);
       try {
         localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
-        await setDoc(doc(db, 'schedules', updated.id), updated);
+        await safeSetDoc(doc(db, 'schedules', updated.id), updated);
       } catch (err) {
         console.warn('Remote sync error:', err);
       }
@@ -233,7 +235,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       setSchedules(newList);
       try {
         localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
-        await setDoc(doc(db, 'schedules', newId), newEvent);
+        await safeSetDoc(doc(db, 'schedules', newId), newEvent);
       } catch (err) {
         console.warn('Remote sync error:', err);
       }
@@ -260,7 +262,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
 
     try {
       localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
-      await setDoc(doc(db, 'schedules', id), updated);
+      await safeSetDoc(doc(db, 'schedules', id), updated);
     } catch (err) {
       console.warn('Visibility update error:', err);
     }
@@ -316,7 +318,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       // update in background
       Promise.all(
         list.map((item) =>
-          setDoc(doc(db, 'schedules', item.id), item).catch((e) => console.warn(e))
+          safeSetDoc(doc(db, 'schedules', item.id), item).catch((e) => console.warn(e))
         )
       );
     } catch (err) {
@@ -356,7 +358,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       localStorage.setItem('kmu_schedules_cache', JSON.stringify(list));
       Promise.all(
         list.map((item) =>
-          setDoc(doc(db, 'schedules', item.id), item).catch((e) => console.warn(e))
+          safeSetDoc(doc(db, 'schedules', item.id), item).catch((e) => console.warn(e))
         )
       );
     } catch (err) {

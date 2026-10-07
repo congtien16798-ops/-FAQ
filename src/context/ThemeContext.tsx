@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { db, safeSetDoc, handleFirestoreError, OperationType } from '../firebase';
 import { initialSiteConfig } from '../constants/initialData';
 import { SiteConfig, ConfigArchiveItem } from '../types';
 
@@ -197,7 +197,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // Attempt to save to Firestore
       try {
-        await setDoc(doc(db, 'site_config', 'main'), toSave);
+        await safeSetDoc(doc(db, 'site_config', 'main'), toSave);
       } catch (fbErr) {
         // If Firestore write fails (e.g. auth required), log with handleFirestoreError per skill
         try {
@@ -295,7 +295,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       applyCssVariables(target.configSnapshot);
 
       try {
-        await setDoc(doc(db, 'site_config', 'main'), target.configSnapshot);
+        await safeSetDoc(doc(db, 'site_config', 'main'), target.configSnapshot);
       } catch {
         // ignore
       }
@@ -329,7 +329,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       applyCssVariables(toSave);
 
       try {
-        await setDoc(doc(db, 'site_config', 'main'), toSave);
+        await safeSetDoc(doc(db, 'site_config', 'main'), toSave);
       } catch (fbErr) {
         try {
           handleFirestoreError(fbErr, OperationType.WRITE, 'site_config/main');
@@ -355,7 +355,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     applyCssVariables(initialSiteConfig);
 
     try {
-      await setDoc(doc(db, 'site_config', 'main'), initialSiteConfig);
+      await safeSetDoc(doc(db, 'site_config', 'main'), initialSiteConfig);
     } catch {
       // ignore
     }
