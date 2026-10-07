@@ -23,6 +23,7 @@ interface SemesterTabInfo {
   labelEn: string;
   labelVi: string;
   labelZh: string;
+  labelMn: string;
   months: string;
 }
 
@@ -33,6 +34,7 @@ const SEMESTER_TABS: SemesterTabInfo[] = [
     labelEn: 'Spring Term',
     labelVi: 'Học kỳ Mùa Xuân',
     labelZh: '春季学期',
+    labelMn: 'Хаврын улирал',
     months: '3월 ~ 5월',
   },
   {
@@ -41,6 +43,7 @@ const SEMESTER_TABS: SemesterTabInfo[] = [
     labelEn: 'Summer Term',
     labelVi: 'Học kỳ Mùa Hè',
     labelZh: '夏季学期',
+    labelMn: 'Зуны улирал',
     months: '6월 ~ 8월',
   },
   {
@@ -49,6 +52,7 @@ const SEMESTER_TABS: SemesterTabInfo[] = [
     labelEn: 'Fall Term',
     labelVi: 'Học kỳ Mùa Thu',
     labelZh: '秋季学期',
+    labelMn: 'Намрын улирал',
     months: '9월 ~ 11월',
   },
   {
@@ -57,6 +61,7 @@ const SEMESTER_TABS: SemesterTabInfo[] = [
     labelEn: 'Winter Term',
     labelVi: 'Học kỳ Mùa Đông',
     labelZh: '冬季学期',
+    labelMn: 'Өвлийн улирал',
     months: '12월 ~ 2월',
   },
 ];
@@ -192,9 +197,19 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
         return sem.labelVi;
       case 'zh':
         return sem.labelZh;
+      case 'mn':
+        return sem.labelMn;
       default:
         return sem.labelKo;
     }
+  };
+
+  const getYearLabel = (yr: number) => {
+    if (currentLang === 'vi') return `Năm học ${yr}`;
+    if (currentLang === 'en') return `${yr} Academic Year`;
+    if (currentLang === 'zh') return `${yr}学年`;
+    if (currentLang === 'mn') return `${yr} он`;
+    return `${yr}년도`;
   };
 
   // Format Month-Day (월-일만 표시, e.g. "10-31" or "10-14 ~ 10-16")
@@ -228,7 +243,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
               {t.scheduleTitle || '한국어학당 일정'}
             </h2>
             <span className="text-[11px] sm:text-xs text-gray-400 hidden md:inline">
-              * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
+              {t.scheduleNotice || '* 본 일정은 학사 사정에 따라 변동될 수 있습니다.'}
             </span>
           </div>
 
@@ -247,7 +262,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
               >
                 {availableYears.map((yr) => (
                   <option key={yr} value={yr}>
-                    {yr}년도
+                    {getYearLabel(yr)}
                   </option>
                 ))}
               </select>
@@ -278,7 +293,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
 
         {/* Small Screen Note */}
         <p className="text-[11px] text-gray-400 mt-2 md:hidden">
-          * 본 일정은 학사 사정에 따라 변동될 수 있습니다.
+          {t.scheduleNotice || '* 본 일정은 학사 사정에 따라 변동될 수 있습니다.'}
         </p>
       </div>
 
@@ -288,10 +303,10 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
           <div className="bg-white rounded-md border border-gray-200 p-12 text-center text-gray-500 shadow-xs">
             <CalendarIcon className="w-8 h-8 text-gray-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-gray-700">
-              선택하신 {selectedYear}년도 {getSemesterLabel(currentTermInfo)}에 등록된 일정이 없습니다.
+              {t.emptySchedule || `선택하신 ${getYearLabel(selectedYear)} ${getSemesterLabel(currentTermInfo)}에 등록된 일정이 없습니다.`}
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              다른 학기 또는 년도를 선택해 보세요.
+              {t.emptyScheduleSub || '다른 학기 또는 년도를 선택해 보세요.'}
             </p>
           </div>
         ) : (
@@ -338,7 +353,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                   {/* Right Action Hint */}
                   <div className="flex items-center gap-1 shrink-0 text-gray-400">
                     <span className="text-xs text-gray-400 group-hover:text-[#1A3B6B] transition-colors font-medium hidden sm:inline">
-                      상세보기
+                      {t.viewDetails || '상세보기'}
                     </span>
                     <span className="text-sm text-gray-400 group-hover:text-[#1A3B6B] transition-colors">
                       ›
@@ -388,7 +403,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
             {/* Modal Header */}
             <div className="mb-2">
               <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-50 text-[#1A3B6B] border border-blue-200">
-                {selectedYear}년도 {getSemesterLabel(currentTermInfo)}
+                {getYearLabel(selectedYear)} {getSemesterLabel(currentTermInfo)}
               </span>
             </div>
 
@@ -400,7 +415,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
             <div className="bg-gray-50 rounded-lg p-3.5 space-y-2 border border-gray-200 text-xs my-4">
               <div className="flex items-center gap-2 text-gray-700">
                 <CalendarIcon className="w-4 h-4 text-[#1A3B6B] shrink-0" />
-                <span className="font-semibold text-gray-900">일정 기간:</span>
+                <span className="font-semibold text-gray-900">{t.schedulePeriod || '일정 기간:'}</span>
                 <span className="font-bold text-gray-900">
                   {formatEventDateDisplay(selectedEvent.startDate, selectedEvent.endDate)}
                 </span>
@@ -408,14 +423,14 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
               {selectedEvent.time && (
                 <div className="flex items-center gap-2 text-gray-700">
                   <Clock className="w-4 h-4 text-[#1A3B6B] shrink-0" />
-                  <span className="font-semibold text-gray-900">시간:</span>
+                  <span className="font-semibold text-gray-900">{t.scheduleTime || '시간:'}</span>
                   <span>{selectedEvent.time}</span>
                 </div>
               )}
               {selectedEvent.location && selectedEvent.location !== '-' && (
                 <div className="flex items-center gap-2 text-gray-700">
                   <MapPin className="w-4 h-4 text-[#1A3B6B] shrink-0" />
-                  <span className="font-semibold text-gray-900">장소:</span>
+                  <span className="font-semibold text-gray-900">{t.scheduleLocation || '장소:'}</span>
                   <span>{selectedEvent.location}</span>
                 </div>
               )}
@@ -424,7 +439,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
             {/* Description */}
             {getEventDesc(selectedEvent) && (
               <div className="mb-6">
-                <h4 className="text-xs font-bold text-gray-700 mb-1">상세 안내</h4>
+                <h4 className="text-xs font-bold text-gray-700 mb-1">{t.scheduleDetails || '상세 안내'}</h4>
                 <p className="text-xs text-gray-600 leading-relaxed bg-gray-50/50 p-3 rounded border border-gray-100 whitespace-pre-wrap">
                   {getEventDesc(selectedEvent)}
                 </p>
@@ -437,7 +452,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
                 onClick={() => setSelectedEvent(null)}
                 className="px-4 py-2 rounded bg-[#1A3B6B] text-white text-xs font-bold hover:bg-blue-900 transition-colors cursor-pointer"
               >
-                닫기
+                {t.close || '닫기'}
               </button>
             </div>
           </div>

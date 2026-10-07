@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Pin, Copy, Share2, Eye, Image as ImageIcon, Che
 import { FaqItem, Language, FaqCategory } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText, translateHtml } from '../services/translator';
+import { translateText, translateHtml, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 
 interface FaqSectionProps {
@@ -58,15 +58,25 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
         });
 
         // 2. Category names for badges in parallel
-        const validCats = (config.categories || []).filter(Boolean);
-        const catPromises = validCats.map(async (cat) => {
-          if (cat.name?.[currentLang]) {
-            return { id: cat.id, name: cat.name[currentLang]! };
-          } else if (cat.name?.ko) {
-            const trans = await translateText(cat.name.ko, currentLang);
-            return { id: cat.id, name: trans };
+        const allCategoryIds = Array.from(
+          new Set([
+            ...(config.categories || []).map((c) => c.id),
+            ...(faqs || []).map((f) => f.category).filter(Boolean),
+          ])
+        );
+
+        const catPromises = allCategoryIds.map(async (catId) => {
+          const direct = getTranslatedCategory(catId, currentLang, config.categories);
+          if (direct && direct !== catId) {
+            return { id: catId, name: direct };
           }
-          return { id: cat.id, name: cat.id };
+          const found = (config.categories || []).find((c) => c.id === catId);
+          if (found?.name?.[currentLang] && found.name[currentLang] !== found.name.ko) {
+            return { id: catId, name: found.name[currentLang]! };
+          }
+          const koName = found?.name?.ko || catId;
+          const trans = await translateText(koName, currentLang);
+          return { id: catId, name: trans };
         });
 
         const [faqResults, catResults] = await Promise.all([
@@ -102,16 +112,11 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     };
   }, [currentLang, faqs, config.categories]);
 
-  // Filter FAQs based on category & search query (automatically pruning empty posts)
+  // Filter FAQs based on category & search query (Safe: preserves all valid posts)
   const filteredFaqs = (faqs || []).filter((faq) => {
     if (!faq || faq.hidden) return false;
-    // Empty post filter: must have a non-empty title and content (or image)
-    const hasTitle = !!faq.title && faq.title.trim() !== '';
-    const plainContent = (faq.content || '').replace(/<[^>]*>/g, '').trim();
-    const hasContent = plainContent !== '' || !!faq.imageUrl || (faq.content || '').includes('<img');
-    if (!hasTitle || !hasContent) return false;
 
-    const matchesCategory = selectedCategory === 'all' || faq.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || matchCategory(faq.category, selectedCategory);
     if (!matchesCategory) return false;
 
     const q = (searchQuery || '').trim().toLowerCase();
@@ -168,31 +173,24 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   };
 
   const getCategoryBadge = (category: string) => {
-    const found = config.categories?.find((c) => c.id === category);
-    if (found) {
-      const label = catTranslations[category] || found.name[currentLang] || found.name.ko || found.id;
-      return { label, color: 'bg-blue-50 text-[#1A3B6B] border-blue-200' };
-    }
-    switch (category) {
-      case 'attendance':
-        return { label: t.catAttendance, color: 'bg-blue-50 text-blue-800 border-blue-200' };
-      case 'visa':
-        return { label: t.catVisa, color: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
-      case 'dormitory':
-        return { label: t.catDormitory, color: 'bg-indigo-50 text-indigo-800 border-indigo-200' };
-      case 'admin':
-        return { label: t.catAdmin, color: 'bg-amber-50 text-amber-800 border-amber-200' };
-      case 'life':
-      default:
-        return { label: t.catLife, color: 'bg-purple-50 text-purple-800 border-purple-200' };
-    }
+    const label =
+      catTranslations[category] ||
+      getTranslatedCategory(category, currentLang, config.categories);
+
+    const norm = normalizeCategory(category);
+    let color = 'bg-blue-50 text-[#1A3B6B] border-blue-200';
+    if (norm === 'visa') color = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    else if (norm === 'dormitory') color = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+    else if (norm === 'admin') color = 'bg-amber-50 text-amber-800 border-amber-200';
+    else if (norm === 'life') color = 'bg-purple-50 text-purple-800 border-purple-200';
+    return { label, color };
   };
 
   const categories: { id: string; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: t.categoryAll, icon: null },
     ...(config.categories || []).map((cat) => ({
       id: cat.id,
-      label: catTranslations[cat.id] || cat.name[currentLang] || cat.name.ko || cat.id,
+      label: catTranslations[cat.id] || getTranslatedCategory(cat.id, currentLang, config.categories),
       icon: renderCategoryIcon(cat.icon),
     })),
   ];
@@ -222,7 +220,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
             const count =
               cat.id === 'all'
                 ? (faqs || []).filter((f) => f && !f.hidden).length
-                : (faqs || []).filter((f) => f && !f.hidden && f.category === cat.id).length;
+                : (faqs || []).filter((f) => f && !f.hidden && matchCategory(f.category, cat.id)).length;
 
             return (
               <button
@@ -269,17 +267,25 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
       {sortedFaqs.length === 0 ? (
         <div className="bg-white rounded-md border border-[#E2E5E8] p-12 text-center text-gray-500">
-          <p className="text-sm font-medium">검색 결과가 없습니다.</p>
+          <p className="text-sm font-medium">{searchQuery ? (t.searchResultsCount ? `0 ${t.searchResultsCount}` : '검색 결과가 없습니다.') : (t.emptyFaq || '등록된 자주 묻는 질문(FAQ)이 없습니다.')}</p>
           <p className="text-xs text-gray-400 mt-1">
-            다른 검색어를 입력하시거나 카테고리를 전체보기로 변경해 보세요.
+            {currentLang === 'ko'
+              ? '다른 검색어를 입력하시거나 카테고리를 전체보기로 변경해 보세요.'
+              : currentLang === 'en'
+              ? 'Please try another search keyword or select All categories.'
+              : currentLang === 'vi'
+              ? 'Vui lòng thử từ khóa khác hoặc chọn Tất cả danh mục.'
+              : currentLang === 'zh'
+              ? '请输入其他搜索词或切换到全部分类。'
+              : 'Өөр түлхүүр үг оруулна уу эсвэл Бүх ангиллыг сонгоно уу.'}
           </p>
           <button
             onClick={() => {
               setSelectedCategory('all');
             }}
-            className="mt-4 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 rounded"
+            className="mt-4 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 rounded font-semibold cursor-pointer"
           >
-            카테고리 초기화
+            {t.categoryAll || '카테고리 초기화'}
           </button>
         </div>
       ) : (
@@ -290,7 +296,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
             const badge = getCategoryBadge(faq.category || '');
             const titleText = (currentLang !== 'ko' && !showOriginal && translatedMap[faq.id]?.title)
               ? translatedMap[faq.id].title
-              : (faq.title || '');
+              : (faq.title || t.noTitle || '(제목 없음)');
             const contentText = (currentLang !== 'ko' && !showOriginal && translatedMap[faq.id]?.content)
               ? translatedMap[faq.id].content
               : (faq.content || '');

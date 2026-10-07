@@ -44,19 +44,42 @@ function MainApp() {
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
-  // Helper to detect specific hardcoded legacy mock IDs only
-  const isMockItem = (id?: string) => {
-    if (!id) return false;
-    return LEGACY_MOCK_IDS.has(id.toLowerCase());
-  };
+// Safe reconciliation: never wipe local posts if Firestore snapshot is empty or delayed
+  function mergeWithLocalCache<T extends { id: string }>(
+    remoteItems: T[],
+    localKey: string,
+    onMissingInRemote?: (missingItem: T) => void
+  ): T[] {
+    try {
+      const cachedStr = localStorage.getItem(localKey);
+      if (!cachedStr) return remoteItems;
+      const localItems = JSON.parse(cachedStr) as T[];
+      if (!Array.isArray(localItems) || localItems.length === 0) return remoteItems;
+
+      const remoteIds = new Set(remoteItems.map((r) => r.id));
+      const merged = [...remoteItems];
+
+      for (const localItem of localItems) {
+        if (!localItem || !localItem.id) continue;
+        if (!remoteIds.has(localItem.id)) {
+          merged.push(localItem);
+          if (onMissingInRemote) {
+            onMissingInRemote(localItem);
+          }
+        }
+      }
+      return merged;
+    } catch {
+      return remoteItems;
+    }
+  }
 
   // FAQs State: defaults to local cache or clean empty array
   const [faqs, setFaqs] = useState<FaqItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_FAQS_KEY);
       if (cached) {
-        const list: FaqItem[] = JSON.parse(cached);
-        return list.filter((item) => !isMockItem(item?.id));
+        return JSON.parse(cached) as FaqItem[];
       }
       return [];
     } catch {
@@ -69,8 +92,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_DOCS_KEY);
       if (cached) {
-        const list: DocumentItem[] = JSON.parse(cached);
-        return list.filter((item) => !isMockItem(item?.id));
+        return JSON.parse(cached) as DocumentItem[];
       }
       return [];
     } catch {
@@ -83,8 +105,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
       if (cached) {
-        const list: InquiryItem[] = JSON.parse(cached);
-        return list.filter((item) => !isMockItem(item?.id));
+        return JSON.parse(cached) as InquiryItem[];
       }
     } catch {
       // ignore
@@ -97,8 +118,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
       if (cached) {
-        const list: ScheduleEvent[] = JSON.parse(cached);
-        return list.filter((item) => !isMockItem(item?.id));
+        return JSON.parse(cached) as ScheduleEvent[];
       }
       return [];
     } catch {
@@ -120,23 +140,23 @@ function MainApp() {
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
-        const item = { ...data, id: data.id || docSnap.id } as FaqItem;
-        if (isMockItem(item.id)) return;
-        if (item.title && item.title.trim() !== '') {
-          list.push(item);
-        }
+        list.push({ ...data, id: data.id || docSnap.id } as FaqItem);
       });
 
-      list.sort((a, b) => {
+      const reconciled = mergeWithLocalCache(list, LOCAL_FAQS_KEY, (missing) => {
+        safeSetDoc(doc(db, 'faqs', missing.id), missing).catch(console.warn);
+      });
+
+      reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
         if (a.order !== undefined) return -1;
         if (b.order !== undefined) return 1;
         return 0;
       });
 
-      setFaqs(list);
+      setFaqs(reconciled);
       try {
-        localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(list));
+        localStorage.setItem(LOCAL_FAQS_KEY, JSON.stringify(reconciled));
       } catch {
         // ignore
       }
@@ -150,23 +170,23 @@ function MainApp() {
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
-        const item = { ...data, id: data.id || docSnap.id } as DocumentItem;
-        if (isMockItem(item.id)) return;
-        if (item.title && item.title.trim() !== '') {
-          list.push(item);
-        }
+        list.push({ ...data, id: data.id || docSnap.id } as DocumentItem);
       });
 
-      list.sort((a, b) => {
+      const reconciled = mergeWithLocalCache(list, LOCAL_DOCS_KEY, (missing) => {
+        safeSetDoc(doc(db, 'documents', missing.id), missing).catch(console.warn);
+      });
+
+      reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
         if (a.order !== undefined) return -1;
         if (b.order !== undefined) return 1;
         return 0;
       });
 
-      setDocuments(list);
+      setDocuments(reconciled);
       try {
-        localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(list));
+        localStorage.setItem(LOCAL_DOCS_KEY, JSON.stringify(reconciled));
       } catch {
         // ignore
       }
@@ -180,16 +200,19 @@ function MainApp() {
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
-        const item = { ...data, id: data.id || docSnap.id } as InquiryItem;
-        if (isMockItem(item.id)) return;
-        list.push(item);
+        list.push({ ...data, id: data.id || docSnap.id } as InquiryItem);
       });
-      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      setInquiries(list);
+      const reconciled = mergeWithLocalCache(list, LOCAL_INQUIRIES_KEY, (missing) => {
+        safeSetDoc(doc(db, 'inquiries', missing.id), missing).catch(console.warn);
+      });
+
+      reconciled.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      setInquiries(reconciled);
       try {
-        localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(list));
-        localStorage.setItem('kmu_inquiries_cache', JSON.stringify(list));
+        localStorage.setItem(LOCAL_INQUIRIES_KEY, JSON.stringify(reconciled));
+        localStorage.setItem('kmu_inquiries_cache', JSON.stringify(reconciled));
       } catch {
         // ignore
       }
@@ -203,20 +226,21 @@ function MainApp() {
 
       snap.forEach((docSnap) => {
         const data = docSnap.data();
-        const item = { ...data, id: data.id || docSnap.id } as ScheduleEvent;
-        if (isMockItem(item.id)) return;
-        if (item.title && item.title.trim() !== '') {
-          list.push(item);
-        }
+        list.push({ ...data, id: data.id || docSnap.id } as ScheduleEvent);
       });
-      list.sort((a, b) => {
+
+      const reconciled = mergeWithLocalCache(list, LOCAL_SCHEDULES_KEY, (missing) => {
+        safeSetDoc(doc(db, 'schedules', missing.id), missing).catch(console.warn);
+      });
+
+      reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
         return (a.startDate || '').localeCompare(b.startDate || '');
       });
 
-      setSchedules(list);
+      setSchedules(reconciled);
       try {
-        localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(list));
+        localStorage.setItem(LOCAL_SCHEDULES_KEY, JSON.stringify(reconciled));
       } catch {
         // ignore
       }

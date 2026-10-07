@@ -51,43 +51,6 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Auto-prune mock inquiries
-  useEffect(() => {
-    if (!inquiries || inquiries.length === 0) return;
-    const isMock = (id?: string) => {
-      if (!id) return true;
-      const lower = id.toLowerCase();
-      return (
-        /^inq-sample-/.test(lower) ||
-        /^(mock|sample|demo|initial|init|seed|test)-/.test(lower) ||
-        lower.startsWith('mock') ||
-        lower.startsWith('sample') ||
-        lower.startsWith('example') ||
-        lower.startsWith('demo')
-      );
-    };
-
-    const mockInqs = inquiries.filter((i) => !i || isMock(i.id));
-    if (mockInqs.length > 0) {
-      const valid = inquiries.filter((i) => !mockInqs.includes(i));
-      setInquiries(valid);
-      try {
-        localStorage.setItem('kmu_inquiries', JSON.stringify(valid));
-      } catch {
-        // ignore
-      }
-      mockInqs.forEach(async (item) => {
-        if (item?.id) {
-          try {
-            await deleteDoc(doc(db, 'inquiries', item.id));
-          } catch {
-            // ignore
-          }
-        }
-      });
-    }
-  }, [inquiries, setInquiries]);
-
   const handleTranslateInquiry = async () => {
     if (!selectedInquiry) return;
     if (transInqText) {

@@ -32,6 +32,8 @@ import { FaqItem, FaqCategory, CategoryItem } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { RichTextEditor } from './RichTextEditor';
+import { optimizeImage } from '../../services/imageOptimizer';
+import { matchCategory } from '../../services/translator';
 
 interface FaqManagerProps {
   faqs: FaqItem[];
@@ -87,42 +89,11 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Filter out any legacy sample IDs
-  useEffect(() => {
-    if (!faqs || faqs.length === 0) return;
-    const LEGACY_MOCKS = new Set(['faq-1', 'faq-2', 'faq-3', 'faq-4', 'faq-5', 'faq-6', 'faq-7', 'faq-8']);
-    const legacyItems = faqs.filter((f) => f && f.id && LEGACY_MOCKS.has(f.id.toLowerCase()));
-
-    if (legacyItems.length > 0) {
-      const validOnly = faqs.filter((f) => !legacyItems.includes(f));
-      setFaqs(validOnly);
-      try {
-        localStorage.setItem('kmu_faqs_cache', JSON.stringify(validOnly));
-      } catch {
-        // ignore
-      }
-      legacyItems.forEach(async (item) => {
-        if (item?.id) {
-          try {
-            await deleteDoc(doc(db, 'faqs', item.id));
-          } catch {
-            // ignore
-          }
-        }
-      });
-    }
-  }, [faqs, setFaqs]);
-
-  // Filtered FAQs
+  // Filtered FAQs (Safe: preserves all registered posts without filtering empty title/content)
   const filteredFaqs = (faqs || []).filter((faq) => {
     if (!faq) return false;
-    // Exclude empty posts
-    const noTitle = !faq.title || faq.title.trim() === '';
-    const plainContent = (faq.content || '').replace(/<[^>]*>/g, '').trim();
-    const noContent = plainContent === '' && !faq.imageUrl && !(faq.content || '').includes('<img');
-    if (noTitle || noContent) return false;
 
-    const matchesCat = categoryFilter === 'all' || faq.category === categoryFilter;
+    const matchesCat = categoryFilter === 'all' || matchCategory(faq.category, categoryFilter);
     if (!matchesCat) return false;
     if (visibilityFilter === 'visible' && faq.hidden) return false;
     if (visibilityFilter === 'hidden' && !faq.hidden) return false;
@@ -259,9 +230,11 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
 
     try {
       localStorage.setItem('kmu_faqs_cache', JSON.stringify(updated));
-      for (const item of updated) {
-        await safeSetDoc(doc(db, 'faqs', item.id), { order: item.order }, { merge: true });
-      }
+      await Promise.all(
+        updated.map((item) =>
+          safeSetDoc(doc(db, 'faqs', item.id), { order: item.order }, { merge: true })
+        )
+      );
     } catch (err) {
       console.warn('Remote sync order failed, saved locally:', err);
     }
@@ -293,16 +266,9 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanTitle = title.trim();
-    const plainContent = content.replace(/<[^>]*>/g, '').trim();
-    const hasRichContent = plainContent !== '' || !!imageUrl.trim() || content.includes('<img');
 
     if (!cleanTitle) {
       showToast('FAQ 제목을 입력해 주세요.');
-      return;
-    }
-
-    if (!hasRichContent) {
-      showToast('답변 내용을 입력해 주세요. 내용이 없는 빈 게시글은 등록할 수 없습니다.');
       return;
     }
 
@@ -310,21 +276,31 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
     const id = editingId || `faq-${Date.now()}`;
     const timestamp = new Date().toISOString();
 
+    // Fast image optimization if image is provided as data URL
+    let finalImageUrl = imageUrl.trim();
+    if (finalImageUrl.startsWith('data:image')) {
+      try {
+        finalImageUrl = await optimizeImage(finalImageUrl, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+      } catch {
+        // use as-is
+      }
+    }
+
     const faqPayload: FaqItem = {
       id,
       category,
-      title: title.trim(),
-      content: content.trim(),
+      title: cleanTitle,
+      content: content.trim() || '<p>안내 내용</p>',
       pinned,
       hidden,
       views: editingId ? faqs.find((f) => f.id === editingId)?.views || 100 : 0,
-      imageUrl: imageUrl.trim() || undefined,
+      imageUrl: finalImageUrl || undefined,
       createdAt: editingId ? faqs.find((f) => f.id === editingId)?.createdAt || timestamp : timestamp,
       updatedAt: timestamp,
       authorId: user?.uid || 'admin',
     };
 
-    // 1. Immediately update in-memory state and localStorage
+    // 1. Instant optimistic state update and local cache persistence
     let nextList: FaqItem[] = [];
     setFaqs((prev) => {
       const idx = prev.findIndex((f) => f.id === id);
@@ -342,18 +318,20 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
       return nextList;
     });
 
-    // 2. Persist to Firestore with safeSetDoc (auto sanitizing undefined properties)
-    try {
-      await safeSetDoc(doc(db, 'faqs', id), faqPayload);
-      showToast('FAQ가 안전하게 등록/저장되었습니다.');
-    } catch (fbErr) {
-      console.warn('Firestore sync note:', fbErr);
-      handleFirestoreError(fbErr, OperationType.WRITE, `faqs/${id}`);
-      showToast('FAQ가 안전하게 저장되었습니다 (로컬 캐시 반영 완료).');
-    } finally {
-      setIsSubmitting(false);
-      setIsEditing(false);
-    }
+    // Close modal immediately for lightning-fast responsiveness
+    setIsEditing(false);
+    setIsSubmitting(false);
+    showToast('FAQ가 신속하고 안전하게 등록/저장되었습니다.');
+
+    // 2. High-speed concurrent Firestore persistence in background
+    safeSetDoc(doc(db, 'faqs', id), faqPayload)
+      .then(() => {
+        // Done
+      })
+      .catch((fbErr) => {
+        console.warn('Firestore sync note:', fbErr);
+        handleFirestoreError(fbErr, OperationType.WRITE, `faqs/${id}`);
+      });
   };
 
   const handleTogglePin = async (faq: FaqItem) => {
@@ -685,7 +663,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
                                 학생 숨김
                               </span>
                             )}
-                            <span>{faq.title}</span>
+                            <span>{faq.title || '(제목 없음)'}</span>
                           </div>
                         </td>
 

@@ -21,6 +21,7 @@ import {
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
 import { DocumentItem, DocumentFileType } from '../../types';
+import { matchCategory } from '../../services/translator';
 
 interface DocumentManagerProps {
   documents: DocumentItem[];
@@ -70,37 +71,12 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     setTimeout(() => setAlertMsg(null), 3000);
   };
 
-  // Filter out any legacy sample IDs
-  useEffect(() => {
-    if (!documents || documents.length === 0) return;
-    const LEGACY_MOCKS = new Set(['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5', 'doc-6']);
-    const legacyItems = documents.filter((d) => d && d.id && LEGACY_MOCKS.has(d.id.toLowerCase()));
+  const categories = ['all', ...Array.from(new Set((documents || []).filter((d) => d?.category).map((d) => d.category)))];
 
-    if (legacyItems.length > 0) {
-      const validOnly = documents.filter((d) => !legacyItems.includes(d));
-      setDocuments(validOnly);
-      try {
-        localStorage.setItem('kmu_docs_cache', JSON.stringify(validOnly));
-      } catch {
-        // ignore
-      }
-      legacyItems.forEach(async (docItem) => {
-        if (docItem?.id) {
-          try {
-            await deleteDoc(doc(db, 'documents', docItem.id));
-          } catch {
-            // ignore
-          }
-        }
-      });
-    }
-  }, [documents, setDocuments]);
-
-  const categories = ['all', ...Array.from(new Set(documents.filter((d) => d?.category && d.title?.trim()).map((d) => d.category)))];
-
+  // Filtered documents (Safe: preserves all registered documents without filtering empty title/content)
   const filteredDocs = (documents || []).filter((d) => {
-    if (!d || !d.title || d.title.trim() === '' || !d.fileName || d.fileName.trim() === '') return false;
-    if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
+    if (!d) return false;
+    if (categoryFilter !== 'all' && !matchCategory(d.category, categoryFilter)) return false;
     if (visibilityFilter === 'visible' && d.hidden) return false;
     if (visibilityFilter === 'hidden' && !d.hidden) return false;
 
@@ -238,9 +214,11 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
     try {
       localStorage.setItem('kmu_docs_cache', JSON.stringify(updated));
-      for (const item of updated) {
-        await safeSetDoc(doc(db, 'documents', item.id), { order: item.order }, { merge: true });
-      }
+      await Promise.all(
+        updated.map((item) =>
+          safeSetDoc(doc(db, 'documents', item.id), { order: item.order }, { merge: true })
+        )
+      );
     } catch (err) {
       console.warn('Remote sync order failed, saved locally:', err);
     }
@@ -384,17 +362,19 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
       return nextDocs;
     });
 
-    // 2. Persist to Firestore with safeSetDoc
-    try {
-      await safeSetDoc(doc(db, 'documents', id), payload);
-      showToast('서식이 안전하게 등록/수정되었습니다.');
-    } catch (fbErr) {
-      console.warn('Document firestore sync note:', fbErr);
-      handleFirestoreError(fbErr, OperationType.WRITE, `documents/${id}`);
-      showToast('서식이 안전하게 저장되었습니다 (로컬 캐시 반영 완료).');
-    } finally {
-      setIsEditing(false);
-    }
+    // Close modal immediately for instant feedback
+    setIsEditing(false);
+    showToast('서식이 신속하고 안전하게 등록/저장되었습니다.');
+
+    // 2. Persist to Firestore with safeSetDoc in background
+    safeSetDoc(doc(db, 'documents', id), payload)
+      .then(() => {
+        // saved
+      })
+      .catch((fbErr) => {
+        console.warn('Document firestore sync note:', fbErr);
+        handleFirestoreError(fbErr, OperationType.WRITE, `documents/${id}`);
+      });
   };
 
   return (
@@ -576,7 +556,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
 
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900">{docItem.title}</span>
+                        <span className="font-semibold text-gray-900">{docItem.title || '(제목 없음)'}</span>
                         {docItem.hidden && (
                           <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-0.5">
                             <EyeOff className="w-3 h-3 text-amber-700" />

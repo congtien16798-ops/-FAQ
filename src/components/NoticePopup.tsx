@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { SiteConfig, PopupIconType, Language } from '../types';
 import { translateText } from '../services/translator';
+import { translations } from '../constants/translations';
 
 interface NoticePopupProps {
   config: SiteConfig;
@@ -31,6 +32,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
   forceOpen = false,
   onCloseForceOpen,
 }) => {
+  const t = translations[currentLang] || translations.ko;
   const [isOpen, setIsOpen] = useState(false);
   const [doNotShowToday, setDoNotShowToday] = useState(false);
 
@@ -77,10 +79,10 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
     };
   }, [currentLang, config.popupBadge, config.popupTitle, config.popupContent, config.popupLinkText]);
 
-  const badgeText = transBadge || config.popupBadge || '중요 공지';
-  const titleText = transTitle || config.popupTitle || '공지사항';
+  const badgeText = transBadge || (config.popupBadge ? (config.popupBadge === '중요 공지' ? t.pinned : config.popupBadge) : t.pinned);
+  const titleText = transTitle || config.popupTitle || (t.pinned || '공지사항');
   const contentText = transContent || config.popupContent || '';
-  const linkText = transLinkText || config.popupLinkText || '바로가기';
+  const linkText = transLinkText || config.popupLinkText || (t.viewDetails || '바로가기');
 
   useEffect(() => {
     if (forceOpen) {
@@ -221,13 +223,13 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
                 onChange={(e) => setDoNotShowToday(e.target.checked)}
                 className="rounded border-gray-300 text-[#1A3B6B] focus:ring-0 w-3.5 h-3.5"
               />
-              <span>오늘 하루 열지 않기</span>
+              <span>{t.doNotShowToday || '오늘 하루 동안 열지 않기'}</span>
             </label>
             <button
               onClick={handleClose}
               className="text-gray-600 hover:text-gray-900 font-semibold px-1 py-0.5"
             >
-              닫기
+              {t.close || '닫기'}
             </button>
           </div>
         </div>
@@ -297,7 +299,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
           {/* Multi-language Auto-Translation Notice */}
           {currentLang !== 'ko' && (
             <div className="mb-3 text-[11px] text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded border border-blue-200 flex items-center justify-between">
-              <span>🌐 Google 자동 번역 적용 ({currentLang.toUpperCase()})</span>
+              <span>🌐 {t.autoTranslateBanner || `Google 자동 번역 적용 (${currentLang.toUpperCase()})`}</span>
               <span className="text-[10px] text-gray-500">Powered by Google Translate</span>
             </div>
           )}
@@ -311,14 +313,14 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
                 onChange={(e) => setDoNotShowToday(e.target.checked)}
                 className="rounded border-gray-300 text-[#1A3B6B] focus:ring-0 w-4 h-4"
               />
-              <span className="text-[11px] text-gray-600">오늘 하루 동안 열지 않기</span>
+              <span className="text-[11px] text-gray-600">{t.doNotShowToday || '오늘 하루 동안 열지 않기'}</span>
             </label>
 
             <button
               onClick={handleClose}
               className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-semibold text-xs transition-colors"
             >
-              닫기
+              {t.close || '닫기'}
             </button>
           </div>
         </div>

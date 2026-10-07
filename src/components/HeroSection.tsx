@@ -8,7 +8,7 @@ import {
 import { Language, FaqCategory, SiteConfig } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText } from '../services/translator';
+import { translateText, getTranslatedCategory } from '../services/translator';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 
 export { renderCategoryIcon };
@@ -54,6 +54,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     const translateHeroData = async () => {
       try {
         const catPromises = (config.categories || []).map(async (cat) => {
+          const direct = getTranslatedCategory(cat.id, currentLang, config.categories);
+          if (direct && direct !== cat.id) {
+            return { id: cat.id, label: direct };
+          }
           if (cat.name[currentLang]) {
             return { id: cat.id, label: cat.name[currentLang]! };
           }
@@ -99,7 +103,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     { id: 'all', label: t.categoryAll, icon: null },
     ...(config.categories || []).map((cat) => ({
       id: cat.id,
-      label: catLabels[cat.id] || cat.name[currentLang] || cat.name.ko || cat.id,
+      label: catLabels[cat.id] || getTranslatedCategory(cat.id, currentLang, config.categories),
       icon: renderCategoryIcon(cat.icon),
     })),
   ];

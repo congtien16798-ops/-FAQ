@@ -3,7 +3,7 @@ import { FileText, Download, Filter, AlertCircle, FileCheck, CheckCircle2, Globe
 import { DocumentItem, Language } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText } from '../services/translator';
+import { translateText, getTranslatedCategory, matchCategory } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 
@@ -30,12 +30,14 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
   // Auto Translation State
   const [transDocMap, setTransDocMap] = useState<Record<string, { title: string; description: string; category: string }>>({});
+  const [transCatMap, setTransCatMap] = useState<Record<string, string>>({});
   const [isTranslating, setIsTranslating] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
   useEffect(() => {
     if (currentLang === 'ko') {
       setTransDocMap({});
+      setTransCatMap({});
       setIsTranslating(false);
       return;
     }
@@ -43,26 +45,58 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
     let isMounted = true;
     setIsTranslating(true);
 
-    const translateDocs = async () => {
+    const translateDocsAndCategories = async () => {
       try {
         const validDocs = (documents || []).filter(Boolean);
-        const results = await Promise.all(
-          validDocs.map(async (doc) => {
-            const [transTitle, transDesc, transCat] = await Promise.all([
-              translateText(doc.title || '', currentLang),
-              translateText(doc.description || '', currentLang),
-              translateText(doc.category || '', currentLang),
-            ]);
-            return { id: doc.id, title: transTitle, description: transDesc, category: transCat };
-          })
+        const docPromises = validDocs.map(async (doc) => {
+          const [transTitle, transDesc, transCat] = await Promise.all([
+            translateText(doc.title || '', currentLang),
+            translateText(doc.description || '', currentLang),
+            translateText(doc.category || '', currentLang),
+          ]);
+          return { id: doc.id, title: transTitle, description: transDesc, category: transCat };
+        });
+
+        const uniqueCats = Array.from(
+          new Set(
+            (documents || [])
+              .filter((d) => d && d.category && d.category.trim() !== 'all')
+              .map((d) => d.category.trim())
+          )
         );
 
+        const catPromises = uniqueCats.map(async (cat) => {
+          const direct = getTranslatedCategory(cat, currentLang, config.categories);
+          if (direct && direct !== cat) {
+            return { cat, label: direct };
+          }
+          const found = (config.categories || []).find((c) => c.id === cat || c.name?.ko === cat);
+          if (found?.name?.[currentLang] && found.name[currentLang] !== found.name.ko) {
+            return { cat, label: found.name[currentLang]! };
+          }
+          const koName = found?.name?.ko || cat;
+          const translated = await translateText(koName, currentLang);
+          return { cat, label: translated };
+        });
+
+        const [docResults, catResults] = await Promise.all([
+          Promise.all(docPromises),
+          Promise.all(catPromises),
+        ]);
+
         if (isMounted) {
-          const newMap: Record<string, { title: string; description: string; category: string }> = {};
-          results.forEach((r) => {
-            newMap[r.id] = { title: r.title, description: r.description, category: r.category };
+          const newDocMap: Record<string, { title: string; description: string; category: string }> = {};
+          docResults.forEach((r) => {
+            newDocMap[r.id] = { title: r.title, description: r.description, category: r.category };
           });
-          setTransDocMap(newMap);
+
+          const newCatMap: Record<string, string> = {};
+          catResults.forEach((r) => {
+            newCatMap[r.cat] = r.label;
+          });
+
+          setTransDocMap(newDocMap);
+          setTransCatMap(newCatMap);
           setIsTranslating(false);
         }
       } catch (err) {
@@ -71,12 +105,12 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
       }
     };
 
-    translateDocs();
+    translateDocsAndCategories();
 
     return () => {
       isMounted = false;
     };
-  }, [currentLang, documents]);
+  }, [currentLang, documents, config.categories]);
 
   // Extract unique categories (excluding 'all' from set to avoid duplicate with initial 'all')
   const categories = [
@@ -92,7 +126,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
   const filteredDocs = (documents || []).filter((doc) => {
     if (!doc || doc.hidden) return false;
-    const matchesCat = selectedCategory === 'all' || doc.category === selectedCategory;
+    const matchesCat = selectedCategory === 'all' || matchCategory(doc.category, selectedCategory);
     return matchesCat;
   });
 
@@ -107,14 +141,8 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
   const getCategoryLabel = (cat: string) => {
     if (cat === 'all') return t.categoryAll;
-    const found = (config.categories || []).find((c) => c.id === cat || c.name.ko === cat);
-    if (found?.name) {
-      if (currentLang !== 'ko' && !showOriginal && found.name[currentLang]) {
-        return found.name[currentLang]!;
-      }
-      return found.name.ko || cat;
-    }
-    return cat;
+    if (transCatMap[cat]) return transCatMap[cat];
+    return getTranslatedCategory(cat, currentLang, config.categories);
   };
 
   const getFormatBadge = (fileType?: string) => {
@@ -163,7 +191,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
             const count =
               cat === 'all'
                 ? (documents || []).filter((d) => d && !d.hidden).length
-                : (documents || []).filter((d) => d && !d.hidden && d.category === cat).length;
+                : (documents || []).filter((d) => d && !d.hidden && matchCategory(d.category, cat)).length;
             const icon = getCategoryIcon(cat);
 
             return (
@@ -215,7 +243,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
           <div className="bg-white rounded-md border border-gray-200 p-12 text-center text-gray-500 shadow-xs">
             <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
             <p className="text-sm font-semibold text-gray-700">
-              {t.noResults || '등록된 서식이 없습니다.'}
+              {t.emptyDownloads || t.noResults || '등록된 서식이 없습니다.'}
             </p>
           </div>
         ) : (
@@ -225,7 +253,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
             const docTitle =
               currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.title
                 ? transDocMap[docId].title
-                : doc.title;
+                : (doc.title || t.noTitle || '(제목 없음)');
             const docDesc =
               currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.description
                 ? transDocMap[docId].description
@@ -233,7 +261,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
             const docCategory =
               currentLang !== 'ko' && !showOriginal && transDocMap[docId]?.category
                 ? transDocMap[docId].category
-                : doc.category;
+                : getCategoryLabel(doc.category);
 
             return (
               <div

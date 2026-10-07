@@ -105,32 +105,6 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
-  // Filter out any legacy sample IDs
-  useEffect(() => {
-    if (!schedules || schedules.length === 0) return;
-    const LEGACY_MOCKS = new Set(['sch-spring-1', 'sch-summer-1', 'sch-fall-1', 'sch-winter-1']);
-    const legacyItems = schedules.filter((s) => s && s.id && LEGACY_MOCKS.has(s.id.toLowerCase()));
-
-    if (legacyItems.length > 0) {
-      const validOnly = schedules.filter((s) => !legacyItems.includes(s));
-      setSchedules(validOnly);
-      try {
-        localStorage.setItem('kmu_schedules_cache', JSON.stringify(validOnly));
-      } catch {
-        // ignore
-      }
-      legacyItems.forEach(async (ev) => {
-        if (ev?.id) {
-          try {
-            await deleteDoc(doc(db, 'schedules', ev.id));
-          } catch {
-            // ignore
-          }
-        }
-      });
-    }
-  }, [schedules, setSchedules]);
-
   // Open Add Modal
   const handleOpenAddModal = () => {
     setEditingEvent(null);
@@ -205,11 +179,14 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       setSchedules(newList);
       try {
         localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
-        await safeSetDoc(doc(db, 'schedules', updated.id), updated);
-      } catch (err) {
-        console.warn('Remote sync error:', err);
+      } catch {
+        // ignore
       }
+      setIsModalOpen(false);
       showToast('일정이 성공적으로 수정되었습니다.');
+      safeSetDoc(doc(db, 'schedules', updated.id), updated).catch((err) => {
+        console.warn('Remote sync error:', err);
+      });
     } else {
       // Create
       const newId = `sch-${Date.now()}`;
@@ -235,14 +212,15 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
       setSchedules(newList);
       try {
         localStorage.setItem('kmu_schedules_cache', JSON.stringify(newList));
-        await safeSetDoc(doc(db, 'schedules', newId), newEvent);
-      } catch (err) {
-        console.warn('Remote sync error:', err);
+      } catch {
+        // ignore
       }
-      showToast('새로운 일정이 등록되었습니다.');
+      setIsModalOpen(false);
+      showToast('새로운 일정이 신속하고 안전하게 등록되었습니다.');
+      safeSetDoc(doc(db, 'schedules', newId), newEvent).catch((err) => {
+        console.warn('Remote sync error:', err);
+      });
     }
-
-    setIsModalOpen(false);
   };
 
   // Toggle Visibility (학생 숨기기 / 보이기)

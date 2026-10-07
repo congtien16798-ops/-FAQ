@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { optimizeImage } from '../../services/imageOptimizer';
 import {
   Bold,
   Italic,
@@ -661,21 +662,25 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   // File Upload Handler
-  const handleFileUpload = (file: File) => {
+  const handleFileUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('이미지 파일(PNG, JPG, GIF, WebP 등)만 업로드할 수 있습니다.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setImagePreview(result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const optimized = await optimizeImage(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+      setImagePreview(optimized);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Clipboard Paste Support for Images
-  const handleEditorPaste = (e: React.ClipboardEvent) => {
+  const handleEditorPaste = async (e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -684,12 +689,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         e.preventDefault();
         const file = items[i].getAsFile();
         if (file) {
-          const reader = new FileReader();
-          reader.onload = (uploadEvent) => {
-            const src = uploadEvent.target?.result as string;
-            insertImageIntoEditor(src, 75, 'center');
-          };
-          reader.readAsDataURL(file);
+          try {
+            const optimized = await optimizeImage(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+            insertImageIntoEditor(optimized, 75, 'center');
+          } catch {
+            const reader = new FileReader();
+            reader.onload = (uploadEvent) => {
+              const src = uploadEvent.target?.result as string;
+              insertImageIntoEditor(src, 75, 'center');
+            };
+            reader.readAsDataURL(file);
+          }
         }
         return;
       }
@@ -697,17 +707,22 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   // Drag & Drop Image onto editor
-  const handleEditorDrop = (e: React.DragEvent) => {
+  const handleEditorDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (uploadEvent) => {
-          const src = uploadEvent.target?.result as string;
-          insertImageIntoEditor(src, 75, 'center');
-        };
-        reader.readAsDataURL(file);
+        try {
+          const optimized = await optimizeImage(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+          insertImageIntoEditor(optimized, 75, 'center');
+        } catch {
+          const reader = new FileReader();
+          reader.onload = (uploadEvent) => {
+            const src = uploadEvent.target?.result as string;
+            insertImageIntoEditor(src, 75, 'center');
+          };
+          reader.readAsDataURL(file);
+        }
       }
     }
   };

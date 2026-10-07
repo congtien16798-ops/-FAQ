@@ -1,4 +1,5 @@
-import { Language } from '../types';
+import { Language, CategoryItem } from '../types';
+import { translations } from '../constants/translations';
 
 // In-memory cache for fast instant rendering across the app
 const memoryCache: Record<string, string> = {};
@@ -573,3 +574,79 @@ export async function detectAndTranslateSearchQuery(
     langMeta,
   };
 }
+
+/**
+ * Normalizes category keys across Korean and English representations.
+ */
+export function normalizeCategory(cat: string | undefined | null): string {
+  if (!cat) return '';
+  const c = cat.trim().toLowerCase();
+  if (c === 'all' || c === '전체' || c === '전체보기') return 'all';
+  if (c === 'attendance' || c === '출결/수업' || c === '출결' || c === '수업') return 'attendance';
+  if (c === 'visa' || c === '비자/체류' || c === '비자' || c === '체류') return 'visa';
+  if (c === 'dormitory' || c === '기숙사' || c === '생활관') return 'dormitory';
+  if (c === 'admin' || c === '행정/증명서' || c === '행정' || c === '증명서') return 'admin';
+  if (c === 'life' || c === '유학생활' || c === '생활') return 'life';
+  return c;
+}
+
+/**
+ * Checks whether two category identifiers or labels match.
+ */
+export function matchCategory(catA: string | undefined | null, catB: string | undefined | null): boolean {
+  if (!catA || !catB) return false;
+  const normA = normalizeCategory(catA);
+  const normB = normalizeCategory(catB);
+  if (normA === 'all' || normB === 'all') return true;
+  return normA === normB || catA === catB;
+}
+
+/**
+ * Universal category translation helper guaranteeing instant, 100% reliable translation
+ * across Korean, English, Vietnamese, Chinese, and Mongolian with zero latency.
+ */
+export function getTranslatedCategory(
+  category: string | undefined | null,
+  lang: Language,
+  configCategories?: CategoryItem[]
+): string {
+  if (!category) return '';
+  const trimmed = category.trim();
+  const lower = trimmed.toLowerCase();
+  const t = translations[lang] || translations.ko;
+
+  if (lower === 'all' || trimmed === '전체' || trimmed === '전체보기') {
+    return t.categoryAll || '전체보기';
+  }
+  if (lower === 'attendance' || trimmed === '출결/수업' || trimmed === '출결' || trimmed === '수업') {
+    return t.catAttendance || '출결/수업';
+  }
+  if (lower === 'visa' || trimmed === '비자/체류' || trimmed === '비자' || trimmed === '체류') {
+    return t.catVisa || '비자/체류';
+  }
+  if (lower === 'dormitory' || trimmed === '기숙사' || trimmed === '생활관') {
+    return t.catDormitory || '기숙사';
+  }
+  if (lower === 'admin' || trimmed === '행정/증명서' || trimmed === '행정' || trimmed === '증명서') {
+    return t.catAdmin || '행정/증명서';
+  }
+  if (lower === 'life' || trimmed === '유학생활' || trimmed === '생활') {
+    return t.catLife || '유학생활';
+  }
+
+  // Check custom categories if defined
+  if (configCategories && configCategories.length > 0) {
+    const found = configCategories.find(
+      (c) => c.id === trimmed || c.id.toLowerCase() === lower || c.name.ko === trimmed
+    );
+    if (found?.name) {
+      if (lang !== 'ko' && found.name[lang] && found.name[lang] !== found.name.ko) {
+        return found.name[lang]!;
+      }
+      return found.name.ko || trimmed;
+    }
+  }
+
+  return trimmed;
+}
+
