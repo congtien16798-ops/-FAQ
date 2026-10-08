@@ -25,6 +25,17 @@ interface NoticePopupProps {
 
 const STORAGE_KEY = 'kmu_notice_popup_dismissed';
 
+/**
+ * Resets the "do not show today" dismissal state so users or admins can test the popup immediately
+ */
+export function resetNoticeDismissal(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export const NoticePopup: React.FC<NoticePopupProps> = ({
   config,
   currentLang = 'ko',
@@ -42,19 +53,24 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
   const [transContent, setTransContent] = useState('');
   const [transLinkText, setTransLinkText] = useState('');
 
+  // Compute unique signature of current notice to allow showing new notices when updated
+  const noticeSignature = `${config.popupTitle || ''}_${(config.popupContent || '').slice(0, 50)}`;
+
   useEffect(() => {
+    // Immediately clear previous translation state when language changes
+    setTransBadge('');
+    setTransTitle('');
+    setTransContent('');
+    setTransLinkText('');
+
     if (!currentLang || currentLang === 'ko') {
-      setTransBadge('');
-      setTransTitle('');
-      setTransContent('');
-      setTransLinkText('');
       return;
     }
 
     let isMounted = true;
     const translateNotice = async () => {
       try {
-        const [b, t, c, l] = await Promise.all([
+        const [b, tText, c, l] = await Promise.all([
           config.popupBadge ? translateText(config.popupBadge, currentLang) : Promise.resolve(''),
           config.popupTitle ? translateText(config.popupTitle, currentLang) : Promise.resolve(''),
           config.popupContent ? translateText(config.popupContent, currentLang) : Promise.resolve(''),
@@ -63,7 +79,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
 
         if (isMounted) {
           if (b) setTransBadge(b);
-          if (t) setTransTitle(t);
+          if (tText) setTransTitle(tText);
           if (c) setTransContent(c);
           if (l) setTransLinkText(l);
         }
@@ -95,13 +111,32 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
       return;
     }
 
-    // Check if dismissed today
+    // Do not pop up if both title and content are blank
+    const hasContent = Boolean(
+      (config.popupTitle && config.popupTitle.trim()) ||
+      (config.popupContent && config.popupContent.trim())
+    );
+    if (!hasContent) {
+      setIsOpen(false);
+      return;
+    }
+
+    // Check if dismissed today for THIS specific notice signature
     try {
-      const dismissedDate = localStorage.getItem(STORAGE_KEY);
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-      if (dismissedDate === today) {
-        setIsOpen(false);
-        return;
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        if (stored.startsWith('{')) {
+          const parsed = JSON.parse(stored);
+          if (parsed.date === today && parsed.sig === noticeSignature) {
+            setIsOpen(false);
+            return;
+          }
+        } else if (stored === today) {
+          // Legacy format; respect for today
+          setIsOpen(false);
+          return;
+        }
       }
     } catch {
       // ignore
@@ -110,16 +145,16 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
     // Short timer for natural entrance
     const timer = setTimeout(() => {
       setIsOpen(true);
-    }, 600);
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, [config.popupEnabled, forceOpen]);
+  }, [config.popupEnabled, forceOpen, noticeSignature]);
 
   const handleClose = () => {
     if (doNotShowToday) {
       try {
         const today = new Date().toISOString().slice(0, 10);
-        localStorage.setItem(STORAGE_KEY, today);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, sig: noticeSignature }));
       } catch {
         // ignore
       }
@@ -130,8 +165,24 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
     }
   };
 
+  // Close on Escape key press
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, doNotShowToday, noticeSignature]);
+
   const handleActionClick = () => {
-    if (config.popupLinkTab && onNavigateTab) {
+    if (config.popupLinkUrl && config.popupLinkUrl.trim()) {
+      const url = config.popupLinkUrl.trim();
+      const targetUrl = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    } else if (config.popupLinkTab && onNavigateTab) {
       onNavigateTab(config.popupLinkTab);
     }
     handleClose();
@@ -144,7 +195,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
   const iconType = config.popupIcon || 'bell';
 
   const renderIcon = () => {
-    const props = { className: 'w-5 h-5 text-white' };
+    const props = { className: 'w-5 h-5 text-white shrink-0' };
     switch (iconType) {
       case 'alert':
         return <AlertTriangle {...props} />;
@@ -196,21 +247,21 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
           </p>
 
           {/* Action button if configured */}
-          {config.popupLinkText && (
+          {(config.popupLinkText || config.popupLinkUrl) && (
             <button
               onClick={handleActionClick}
-              className="w-full py-2 px-3 rounded text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-opacity hover:opacity-95 mb-3 cursor-pointer"
+              className="w-full py-2 px-3 rounded text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-opacity hover:opacity-95 mb-3 cursor-pointer shadow-xs"
               style={{ backgroundColor: color }}
             >
               <span>{linkText}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              {config.popupLinkUrl ? <ExternalLink className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </button>
           )}
 
           {/* Multi-language Auto-Translation Notice */}
           {currentLang !== 'ko' && (
-            <div className="mb-2 text-[10px] text-blue-600 bg-blue-50/80 px-2 py-1 rounded border border-blue-100 flex items-center gap-1">
-              <span>🌐 Powered by Google Translate</span>
+            <div className="mb-2 text-[10px] text-blue-700 bg-blue-50/80 px-2 py-1 rounded border border-blue-100 flex items-center justify-between">
+              <span>🌐 {t.autoTranslateBanner || `자동 번역 적용 (${currentLang.toUpperCase()})`}</span>
             </div>
           )}
 
@@ -242,6 +293,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="popup-title"
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-2xs flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={handleClose}
     >
@@ -263,7 +315,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
               <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-white/25 uppercase tracking-wider mb-0.5">
                 {badgeText}
               </span>
-              <h3 className="text-sm md:text-base font-bold text-white tracking-tight">
+              <h3 id="popup-title" className="text-sm md:text-base font-bold text-white tracking-tight">
                 {titleText}
               </h3>
             </div>
@@ -271,7 +323,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
 
           <button
             onClick={handleClose}
-            className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+            className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
             aria-label="닫기"
           >
             <X className="w-5 h-5" />
@@ -285,22 +337,21 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
           </div>
 
           {/* Action Link button */}
-          {config.popupLinkText && (
+          {(config.popupLinkText || config.popupLinkUrl) && (
             <button
               onClick={handleActionClick}
               className="w-full py-2.5 px-4 rounded text-xs font-bold text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-95 mb-3 shadow-xs cursor-pointer"
               style={{ backgroundColor: color }}
             >
               <span>{linkText}</span>
-              <ChevronRight className="w-4 h-4" />
+              {config.popupLinkUrl ? <ExternalLink className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </button>
           )}
 
           {/* Multi-language Auto-Translation Notice */}
           {currentLang !== 'ko' && (
-            <div className="mb-3 text-[11px] text-blue-700 bg-blue-50/80 px-2.5 py-1 rounded border border-blue-200 flex items-center justify-between">
-              <span>🌐 {t.autoTranslateBanner || `Google 자동 번역 적용 (${currentLang.toUpperCase()})`}</span>
-              <span className="text-[10px] text-gray-500">Powered by Google Translate</span>
+            <div className="mb-3 text-[11px] text-blue-700 bg-blue-50/80 px-2.5 py-1.5 rounded border border-blue-200 flex items-center justify-between">
+              <span>🌐 {t.autoTranslateBanner || `자동 번역 적용 (${currentLang.toUpperCase()})`}</span>
             </div>
           )}
 
@@ -318,7 +369,7 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
 
             <button
               onClick={handleClose}
-              className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-semibold text-xs transition-colors"
+              className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded font-semibold text-xs transition-colors cursor-pointer"
             >
               {t.close || '닫기'}
             </button>

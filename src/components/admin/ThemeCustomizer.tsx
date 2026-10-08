@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { KmuLogo } from '../KmuLogo';
-import { NoticePopup } from '../NoticePopup';
+import { NoticePopup, resetNoticeDismissal } from '../NoticePopup';
 import { Navbar } from '../Navbar';
 import { HeroSection } from '../HeroSection';
 import { FaqSection } from '../FaqSection';
@@ -1557,14 +1557,27 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   </label>
                 </div>
 
-                {/* Test Preview Trigger Button */}
-                <button
-                  onClick={() => setPreviewPopupOpen(true)}
-                  className="w-full py-2.5 px-3 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  <span>실시간 팝업 미리보기 열기 (테스트 확인)</span>
-                </button>
+                {/* Test Preview Trigger & Dismissal Reset Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPreviewPopupOpen(true)}
+                    className="w-full py-2.5 px-3 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>실시간 팝업 미리보기 열기</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetNoticeDismissal();
+                      setPreviewPopupOpen(true);
+                    }}
+                    className="w-full py-2.5 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                    title="방문자의 '오늘 하루 동안 열지 않기' 설정을 초기화하고 즉시 팝업을 엽니다."
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>'오늘 안보기' 초기화 후 열기</span>
+                  </button>
+                </div>
 
                 {/* Popup Layout Style */}
                 <div>
@@ -1699,33 +1712,48 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   </div>
 
                   {/* Action Link Button Config */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        바로가기 버튼 문구 (선택)
-                      </label>
-                      <input
-                        type="text"
-                        value={draftConfig.popupLinkText || ''}
-                        onChange={(e) => updateDraft({ popupLinkText: e.target.value })}
-                        placeholder="예: 서식 다운로드 바로가기"
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
-                      />
+                  <div className="space-y-3 pt-2 border-t border-gray-100">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">
+                          바로가기 버튼 문구 (선택)
+                        </label>
+                        <input
+                          type="text"
+                          value={draftConfig.popupLinkText || ''}
+                          onChange={(e) => updateDraft({ popupLinkText: e.target.value })}
+                          placeholder="예: 비자 연장 서식 다운로드"
+                          className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-gray-700 mb-1">
+                          클릭 시 이동할 내부 탭
+                        </label>
+                        <select
+                          value={draftConfig.popupLinkTab || 'downloads'}
+                          onChange={(e) => updateDraft({ popupLinkTab: e.target.value as any })}
+                          className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50"
+                        >
+                          <option value="downloads">서식 자료실 (Downloads)</option>
+                          <option value="schedule">한국어학당 학사 일정 (Schedule)</option>
+                          <option value="faq">자주 묻는 질문 (FAQ)</option>
+                          <option value="inquiry">1:1 문의 상담 (Inquiry)</option>
+                          <option value="">링크 없음 (단순 닫기)</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
                       <label className="block font-semibold text-gray-700 mb-1">
-                        클릭 시 이동할 탭
+                        또는 외부 연결 웹사이트 URL (선택)
                       </label>
-                      <select
-                        value={draftConfig.popupLinkTab || 'downloads'}
-                        onChange={(e) => updateDraft({ popupLinkTab: e.target.value as any })}
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50"
-                      >
-                        <option value="downloads">서식 자료실 (Downloads)</option>
-                        <option value="faq">자주 묻는 질문 (FAQ)</option>
-                        <option value="inquiry">1:1 문의 상담 (Inquiry)</option>
-                        <option value="">링크 없음 (단순 닫기)</option>
-                      </select>
+                      <input
+                        type="url"
+                        value={draftConfig.popupLinkUrl || ''}
+                        onChange={(e) => updateDraft({ popupLinkUrl: e.target.value })}
+                        placeholder="예: https://www.hikorea.go.kr (입력 시 새 창으로 이동)"
+                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
+                      />
                     </div>
                   </div>
                 </div>

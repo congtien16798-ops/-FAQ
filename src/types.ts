@@ -137,7 +137,8 @@ export interface SiteConfig {
   popupStyle?: PopupStyle;
   popupIcon?: PopupIconType;
   popupLinkText?: string;
-  popupLinkTab?: 'faq' | 'downloads' | 'inquiry' | '';
+  popupLinkTab?: 'faq' | 'downloads' | 'inquiry' | 'schedule' | '';
+  popupLinkUrl?: string;
   // Search Button & Search Bar Design
   searchButtonText?: string;
   searchButtonSize?: SearchButtonSize;

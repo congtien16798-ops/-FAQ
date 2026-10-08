@@ -38,6 +38,102 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// High-Accuracy Multi-language Translation API Endpoint (Specialized for Vietnamese & University Context)
+app.post('/api/translate', async (req, res) => {
+  try {
+    const { text, targetLang = 'vi', sourceLang = 'ko' } = req.body;
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.json({ translated: text || '' });
+    }
+
+    if (targetLang === sourceLang) {
+      return res.json({ translated: text });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(503).json({ error: 'AI Client unavailable', useFallback: true });
+    }
+
+    const targetLangNames: Record<string, string> = {
+      vi: 'Vietnamese (Tiếng Việt)',
+      en: 'English',
+      zh: 'Simplified Chinese (简体中文)',
+      mn: 'Mongolian (Монгол хэл)',
+      ko: 'Korean (한국어)',
+    };
+
+    const targetLangLabel = targetLangNames[targetLang] || targetLang;
+
+    const translationPrompt = `
+You are an expert official translator specializing in Keimyung University (계명대학교) Korean Language Institute (한국어학당) and Korean immigration/university administration.
+Translate the following source text (${sourceLang === 'ko' ? 'Korean' : sourceLang}) into natural, highly accurate, professional ${targetLangLabel}.
+
+[CRITICAL TRANSLATION RULES FOR VIETNAMESE (Tiếng Việt)]:
+1. Use accurate, standard Vietnamese university and administrative terms:
+   - "한국어학당" -> "Viện Ngôn ngữ tiếng Hàn (ĐH Keimyung)" or "Khoa tiếng Hàn"
+   - "외국인등록증" -> "Thẻ đăng ký người nước ngoài (Thẻ cư trú ARC)"
+   - "체류기간 연장" -> "Gia hạn thời gian lưu trú (Gia hạn visa)"
+   - "수료 / 수료증 / 수료식" -> "Hoàn thành khóa học / Giấy chứng nhận hoàn thành / Lễ bế giảng (수료식)"
+   - "출결 / 출석률" -> "Điểm danh / Tỷ lệ chuyên cần (출석률)"
+   - "결석 / 공결 / 병결" -> "Vắng mặt / Nghỉ học có phép (Công kết) / Nghỉ ốm có giấy bác sĩ"
+   - "생활관 / 기숙사" -> "Ký túc xá (KTX)"
+   - "기숙사 퇴사" -> "Rời ký túc xá / Trả phòng KTX" (NEVER translate as "từ chức" or "thôi việc"!)
+   - "외박" -> "Nghỉ qua đêm ngoài KTX (Ngoại trú)"
+   - "등록금" -> "Học phí"
+   - "장학금 / 성적장학금" -> "Học bổng / Học bổng thành tích học tập"
+   - "시간제 취업 (아르바이트)" -> "Việc làm thêm bán thời gian (Part-time)"
+   - "재학증명서 / 성적증명서" -> "Giấy chứng nhận đang theo học / Bảng điểm"
+   - "잔고증명서" -> "Giấy xác nhận số dư tài khoản ngân hàng"
+   - "하이코리아" -> "Cổng điện tử Hi Korea (hikorea.go.kr)"
+   - "국민건강보험" -> "Bảo hiểm Y tế Quốc gia Hàn Quốc (NHIS)"
+   - "동영관 / 바우어관 / 명교생활관" -> "Tòa Dongyeong (동영관) / Tòa Bauer (바우어관) / KTX Myeonggyo (명교생활관)"
+2. Preserve all line breaks, numbers, bullet points, phone numbers (e.g. 053-580-6923), URLs, and room numbers.
+3. Keep the tone courteous, clear, and reassuring for international students.
+4. Output ONLY the translated text without conversational filler, markdown code blocks, or greetings.
+
+Source text:
+${text}
+`.trim();
+
+    let translated = '';
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
+        config: {
+          temperature: 0.2, // Low temperature for high accuracy and deterministic translation
+        },
+      });
+      translated = response.text?.trim() || '';
+    } catch (primaryErr: any) {
+      console.warn('[TranslateAPI] gemini-3.8-flash failed, trying gemini-3.1-flash-lite:', primaryErr?.message || primaryErr);
+      try {
+        const backupResponse = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
+          config: {
+            temperature: 0.2,
+          },
+        });
+        translated = backupResponse.text?.trim() || '';
+      } catch (backupErr) {
+        console.warn('[TranslateAPI] Both Gemini models failed, instructing client to use fallback:', backupErr);
+      }
+    }
+
+    if (translated) {
+      return res.json({ translated });
+    }
+
+    return res.status(500).json({ error: 'Empty translation response', useFallback: true });
+  } catch (error: any) {
+    console.warn('[TranslateAPI] Translation handler error, client will fallback:', error?.message || error);
+    return res.status(500).json({ error: 'Translation error', useFallback: true });
+  }
+});
+
 // Chatbot API Endpoint
 app.post('/api/chat', async (req, res) => {
   try {

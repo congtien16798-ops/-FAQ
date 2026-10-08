@@ -40,6 +40,78 @@ const langMap: Record<Language, string> = {
 const pendingRequests = new Map<string, Promise<string>>();
 
 /**
+ * Post-processes Vietnamese translation to correct machine-translation inaccuracies
+ * in Korean university, dormitory, and immigration administration contexts.
+ */
+export function refineVietnameseTranslation(text: string): string {
+  if (!text) return text;
+  let res = text;
+
+  // 1. Dormitory checkout (퇴사) mistranslated as job resignation (từ chức / thôi việc / nghỉ việc)
+  res = res.replace(/(?:đơn|thủ tục|hồ sơ|ngày|đăng ký|xin)\s+(?:xin\s+)?(?:thôi việc|từ chức|nghỉ việc)\s+(?:tại|ở)?\s*(?:ký túc xá|KTX)/gi, 'thủ tục trả phòng KTX (rời ký túc xá)');
+  res = res.replace(/thôi việc tại ký túc xá|từ chức ký túc xá|nghỉ việc ký túc xá|thôi việc ktx/gi, 'trả phòng ký túc xá (rời KTX)');
+  res = res.replace(/\b(?:thôi việc|từ chức|nghỉ việc)\b/gi, (match, offset, str) => {
+    const context = str.slice(Math.max(0, offset - 40), Math.min(str.length, offset + 40));
+    if (/ký túc xá|ktx|phòng|sinh hoạt|myeonggyo|명교/i.test(context)) {
+      return 'trả phòng KTX';
+    }
+    return match;
+  });
+
+  // 2. Overnight stay outside dorm (외박)
+  res = res.replace(/ngủ bên ngoài|ngủ ngoài/gi, 'nghỉ qua đêm ngoài KTX (ngoại trú)');
+  res = res.replace(/đơn ngủ ngoài/gi, 'đơn xin nghỉ qua đêm ngoài KTX');
+
+  // 3. Excused absence (공결) mistranslated as public holiday (kỳ nghỉ công cộng)
+  res = res.replace(/kỳ nghỉ công cộng|nghỉ lễ công cộng/gi, 'nghỉ học có phép (công kết)');
+  res = res.replace(/nghỉ phép chính thức/gi, 'nghỉ học có phép (công kết)');
+
+  // 4. Illness absence (병결)
+  res = res.replace(/kết hợp bệnh tật|bệnh tật kết hợp/gi, 'nghỉ ốm có giấy khám bệnh (병결)');
+
+  // 5. Alien registration card (외국인등록증)
+  res = res.replace(/chứng nhận đăng ký người nước ngoài/gi, 'Thẻ đăng ký người nước ngoài (ARC)');
+  res = res.replace(/thẻ đăng ký người nước ngoài/gi, 'Thẻ đăng ký người nước ngoài (ARC)');
+
+  // 6. Extension of stay (체류기간 연장)
+  res = res.replace(/kéo dài thời gian ở lại|kéo dài thời gian cư trú/gi, 'gia hạn thời gian lưu trú (gia hạn visa)');
+  res = res.replace(/thời gian ở lại/gi, 'thời gian lưu trú');
+
+  // 7. Korean Language Institute (한국어학당)
+  res = res.replace(/trường học tiếng Hàn|trường tiếng Hàn/gi, 'Viện Ngôn ngữ Hàn Quốc');
+  res = res.replace(/học viện tiếng Hàn/gi, 'Viện Ngôn ngữ tiếng Hàn (한국어학당)');
+
+  // 8. Tuition (등록금 / 수업료)
+  res = res.replace(/phí đăng ký học kỳ/gi, 'học phí học kỳ');
+  res = res.replace(/hóa đơn phí đăng ký|thông báo phí đăng ký/gi, 'thông báo nộp học phí');
+
+  // 9. Merit scholarship (성적장학금)
+  res = res.replace(/học bổng lớp/gi, 'học bổng thành tích học tập');
+
+  // 10. Certificate of completion (수료증) & Graduation (수료식)
+  res = res.replace(/chứng chỉ hoàn thành/gi, 'Giấy chứng nhận hoàn thành khóa học (수료증)');
+  res = res.replace(/lễ hoàn thành khóa học/gi, 'Lễ bế giảng (수료식)');
+
+  // 11. Certificate of enrollment (재학증명서)
+  res = res.replace(/chứng nhận đang học|chứng chỉ đang học/gi, 'Giấy chứng nhận đang theo học (재학증명서)');
+
+  // 12. Part-time employment permit (시간제취업허가서)
+  res = res.replace(/giấy phép làm việc bán thời gian/gi, 'Giấy phép làm thêm (시간제 취업 허가서)');
+
+  // 13. National Health Insurance (국민건강보험)
+  res = res.replace(/bảo hiểm y tế quốc gia/gi, 'Bảo hiểm Y tế Quốc gia Hàn Quốc (NHIS)');
+
+  // 14. Bank balance certificate (잔고증명서)
+  res = res.replace(/chứng nhận số dư/gi, 'Giấy xác nhận số dư tài khoản ngân hàng (잔고증명서)');
+
+  // 15. Keimyung campus names & buildings
+  res = res.replace(/khuôn viên Daemyung/gi, 'Cơ sở Daemyung (대명캠퍼스)');
+  res = res.replace(/khuôn viên Seongseo/gi, 'Cơ sở Seongseo (성서캠퍼스)');
+
+  return res;
+}
+
+/**
  * Translates a single plain text from sourceLang (default 'ko') to targetLang (en, vi, mn, zh).
  * If targetLang === sourceLang or text is empty, returns original text immediately.
  */
@@ -63,7 +135,7 @@ export async function translateText(
     return pendingRequests.get(cacheKey)!;
   }
 
-  // Handle long text chunking to prevent HTTP 414 URI Too Long errors
+  // Handle long text chunking for huge articles
   if (trimmed.length > 700) {
     const lines = trimmed.split('\n');
     const chunks: string[] = [];
@@ -106,6 +178,33 @@ export async function translateText(
   const sl = sourceLang === 'ko' ? 'ko' : sourceLang;
 
   const fetchPromise = (async () => {
+    // 1. Try server-side AI translation endpoint first (empowered by Gemini 3.8 Flash)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const apiRes = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed, targetLang, sourceLang: sl }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data && data.translated) {
+          const finalResult = targetLang === 'vi' ? refineVietnameseTranslation(data.translated) : data.translated;
+          memoryCache[cacheKey] = finalResult;
+          persistCache();
+          return finalResult;
+        }
+      }
+    } catch {
+      // Proceed to fallback
+    }
+
+    // 2. Fallback to Google Translate GTX endpoint + Domain Post-Processing
     try {
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(
         trimmed
@@ -118,8 +217,11 @@ export async function translateText(
       const data = await response.json();
       if (Array.isArray(data) && Array.isArray(data[0])) {
         const translatedParts = data[0].map((item: any[]) => item[0]);
-        const fullTranslated = translatedParts.join('');
+        let fullTranslated = translatedParts.join('');
         if (fullTranslated) {
+          if (targetLang === 'vi') {
+            fullTranslated = refineVietnameseTranslation(fullTranslated);
+          }
           memoryCache[cacheKey] = fullTranslated;
           persistCache();
           return fullTranslated;
@@ -276,6 +378,53 @@ export const MULTI_LANG_SEARCH_LEXICON: Record<string, { ko: string; lang: Langu
   'tải về': { ko: '서식 다운로드 서식자료실', lang: 'vi' },
   'tot nghiep': { ko: '수료 졸업 수료식', lang: 'vi' },
   'tốt nghiệp': { ko: '수료 졸업 수료식', lang: 'vi' },
+  'be giang': { ko: '수료식 수료증 졸업', lang: 'vi' },
+  'bế giảng': { ko: '수료식 수료증 졸업', lang: 'vi' },
+  'the arc': { ko: '외국인등록증 체류카드 비자', lang: 'vi' },
+  'the cu tru': { ko: '외국인등록증 체류카드 체류기간연장', lang: 'vi' },
+  'thẻ cư trú': { ko: '외국인등록증 체류카드 체류기간연장', lang: 'vi' },
+  'the ngoai kieu': { ko: '외국인등록증 체류카드', lang: 'vi' },
+  'thẻ ngoại kiều': { ko: '외국인등록증 체류카드', lang: 'vi' },
+  'tra phong ktx': { ko: '기숙사 퇴사 환불 생활관', lang: 'vi' },
+  'trả phòng ktx': { ko: '기숙사 퇴사 환불 생활관', lang: 'vi' },
+  'tra phong': { ko: '기숙사 퇴사 생활관', lang: 'vi' },
+  'trả phòng': { ko: '기숙사 퇴사 생활관', lang: 'vi' },
+  'roi ktx': { ko: '기숙사 퇴사 환불', lang: 'vi' },
+  'rời ktx': { ko: '기숙사 퇴사 환불', lang: 'vi' },
+  'lam them': { ko: '시간제취업 아르바이트 체류자격외활동허가', lang: 'vi' },
+  'làm thêm': { ko: '시간제취업 아르바이트 체류자격외활동허가', lang: 'vi' },
+  'part time': { ko: '시간제취업 아르바이트', lang: 'vi' },
+  'ar bait': { ko: '아르바이트 시간제취업', lang: 'vi' },
+  'viec lam': { ko: '시간제취업 아르바이트', lang: 'vi' },
+  'việc làm': { ko: '시간제취업 아르바이트', lang: 'vi' },
+  'cong ket': { ko: '공결 신청서 진단서 결석', lang: 'vi' },
+  'công kết': { ko: '공결 신청서 진단서 결석', lang: 'vi' },
+  'nghi phep': { ko: '공결 신청서 결석 휴학', lang: 'vi' },
+  'nghỉ phép': { ko: '공결 신청서 결석 휴학', lang: 'vi' },
+  'nghi om': { ko: '공결 병결 진단서 병원', lang: 'vi' },
+  'nghỉ ốm': { ko: '공결 병결 진단서 병원', lang: 'vi' },
+  'so du ngan hang': { ko: '잔고증명서 은행 잔고', lang: 'vi' },
+  'số dư ngân hàng': { ko: '잔고증명서 은행 잔고', lang: 'vi' },
+  'sao ke': { ko: '잔고증명서 은행 거래내역', lang: 'vi' },
+  'sao kê': { ko: '잔고증명서 은행 거래내역', lang: 'vi' },
+  'xac nhan so du': { ko: '잔고증명서 은행 잔고', lang: 'vi' },
+  'xác nhận số dư': { ko: '잔고증명서 은행 잔고', lang: 'vi' },
+  'dong hoc phi': { ko: '등록금 납부 가상계좌', lang: 'vi' },
+  'đóng học phí': { ko: '등록금 납부 가상계좌', lang: 'vi' },
+  'nop hoc phi': { ko: '등록금 납부 가상계좌', lang: 'vi' },
+  'nộp học phí': { ko: '등록금 납부 가상계좌', lang: 'vi' },
+  'bang diem': { ko: '성적증명서 성적', lang: 'vi' },
+  'bảng điểm': { ko: '성적증명서 성적', lang: 'vi' },
+  'giay xac nhan': { ko: '재학증명서 증명서 서식', lang: 'vi' },
+  'giấy xác nhận': { ko: '재학증명서 증명서 서식', lang: 'vi' },
+  'bao hiem y te': { ko: '국민건강보험 공단', lang: 'vi' },
+  'bảo hiểm y tế': { ko: '국민건강보험 공단', lang: 'vi' },
+  'thi giua ky': { ko: '시험 중간고사 평가', lang: 'vi' },
+  'thi giữa kỳ': { ko: '시험 중간고사 평가', lang: 'vi' },
+  'thi cuoi ky': { ko: '시험 기말고사 평가', lang: 'vi' },
+  'thi cuối kỳ': { ko: '시험 기말고사 평가', lang: 'vi' },
+  'xep lop': { ko: '레벨테스트 분반평가', lang: 'vi' },
+  'xếp lớp': { ko: '레벨테스트 분반평가', lang: 'vi' },
 
   // Chinese (zh)
   '签证延期': { ko: '비자 연장 외국인등록증 출입국', lang: 'zh' },
