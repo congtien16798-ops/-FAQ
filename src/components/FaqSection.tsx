@@ -5,6 +5,7 @@ import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText, translateHtml, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
 import { renderCategoryIcon } from '../constants/categoryIcons';
+import { getFaqShareUrl } from '../services/shareHelper';
 
 interface FaqSectionProps {
   faqs: FaqItem[];
@@ -12,6 +13,8 @@ interface FaqSectionProps {
   selectedCategory: FaqCategory | 'all';
   setSelectedCategory: (cat: FaqCategory | 'all') => void;
   searchQuery: string;
+  targetFaqId?: string | null;
+  onClearTargetFaqId?: () => void;
 }
 
 export const FaqSection: React.FC<FaqSectionProps> = ({
@@ -20,11 +23,14 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   selectedCategory,
   setSelectedCategory,
   searchQuery,
+  targetFaqId,
+  onClearTargetFaqId,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [modalImage, setModalImage] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
 
@@ -141,22 +147,73 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     return dateB - dateA;
   });
 
+  // Auto-jump, expand, and highlight targeted FAQ from share links
+  useEffect(() => {
+    let activeTargetId = targetFaqId;
+    if (!activeTargetId && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash || '';
+      activeTargetId = params.get('faq') || params.get('id');
+      if (!activeTargetId && hash.startsWith('#faq-')) {
+        activeTargetId = decodeURIComponent(hash.replace('#faq-', ''));
+      }
+    }
+
+    if (!activeTargetId) return;
+
+    const foundFaq = faqs.find((f) => f && f.id === activeTargetId);
+    if (!foundFaq) return;
+
+    // Ensure category doesn't filter out the shared post
+    if (selectedCategory !== 'all' && !matchCategory(foundFaq.category, selectedCategory)) {
+      setSelectedCategory('all');
+    }
+
+    // Expand and highlight immediately
+    setExpandedId(foundFaq.id);
+    setHighlightedId(foundFaq.id);
+
+    // Scroll smoothly to target element
+    const scrollToTarget = () => {
+      const el = document.getElementById(`faq-${foundFaq.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    scrollToTarget();
+    const t1 = setTimeout(scrollToTarget, 80);
+    const t2 = setTimeout(scrollToTarget, 250);
+    const t3 = setTimeout(scrollToTarget, 600);
+
+    const highlightTimer = setTimeout(() => {
+      setHighlightedId(null);
+    }, 4500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(highlightTimer);
+    };
+  }, [targetFaqId, faqs, selectedCategory, setSelectedCategory]);
+
   const toggleExpand = (uniqueId: string) => {
     setExpandedId((prev) => (prev === uniqueId ? null : uniqueId));
   };
 
   const handleCopyUrl = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}${window.location.pathname}#faq-${id}`;
+    const url = getFaqShareUrl(id);
     navigator.clipboard.writeText(url).then(() => {
-      setCopyToast(t.urlCopied);
+      setCopyToast(t.urlCopied || '게시글 바로보기 링크가 복사되었습니다.');
       setTimeout(() => setCopyToast(null), 3000);
     });
   };
 
   const handleWebShare = async (faq: FaqItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = `${window.location.origin}${window.location.pathname}#faq-${faq.id}`;
+    const shareUrl = getFaqShareUrl(faq.id);
     if (navigator.share) {
       try {
         await navigator.share({
@@ -293,6 +350,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
           {sortedFaqs.map((faq, index) => {
             const uniqueItemKey = faq.id && faq.id.trim() !== '' ? faq.id.trim() : `faq-card-${index}`;
             const isExpanded = expandedId === uniqueItemKey;
+            const isHighlighted = highlightedId === uniqueItemKey;
             const badge = getCategoryBadge(faq.category || '');
             const titleText = (currentLang !== 'ko' && !showOriginal && translatedMap[faq.id]?.title)
               ? translatedMap[faq.id].title
@@ -305,8 +363,10 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
               <div
                 key={`faq-item-card-${uniqueItemKey}-${index}`}
                 id={`faq-${uniqueItemKey}`}
-                className={`w-full bg-white rounded-md border transition-all shadow-2xs overflow-hidden ${
-                  isExpanded
+                className={`w-full bg-white rounded-md border transition-all duration-300 shadow-2xs overflow-hidden ${
+                  isHighlighted
+                    ? 'border-[#1A3B6B] ring-2 ring-[#1A3B6B] ring-offset-2 shadow-lg bg-blue-50/20'
+                    : isExpanded
                     ? 'border-[#1A3B6B] shadow-xs'
                     : 'border-[#E2E5E8] hover:border-gray-300'
                 }`}
@@ -317,6 +377,14 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                   className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3 cursor-pointer select-none"
                 >
                   <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                    {/* Shared link indicator */}
+                    {isHighlighted && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-[#1A3B6B] text-white animate-pulse shrink-0">
+                        <Check className="w-3 h-3" />
+                        <span>공유 링크 연결</span>
+                      </span>
+                    )}
+
                     {/* Pinned indicator if pinned */}
                     {faq.pinned && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-[#D97736]/10 text-[#D97736] border border-[#D97736]/30 shrink-0">

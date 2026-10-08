@@ -10,7 +10,8 @@ import {
   Bot,
   Calendar,
   Users,
-  X
+  X,
+  Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,6 +23,7 @@ import { InquiryManager } from './InquiryManager';
 import { ChatbotManager } from './ChatbotManager';
 import { ScheduleManager } from './ScheduleManager';
 import { AdminAccountManager } from './AdminAccountManager';
+import { NoticePopupManager } from './NoticePopupManager';
 
 interface AdminDashboardProps {
   faqs: FaqItem[];
@@ -47,9 +49,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onExitAdmin,
 }) => {
   const { user, isAdmin, loading, error, signInWithGoogle, signOut, clearError } = useAuth();
-  const { isDesignMode, setIsDesignMode } = useTheme();
+  const { config, isDesignMode, setIsDesignMode } = useTheme();
 
-  const [activeAdminTab, setActiveAdminTab] = useState<'design' | 'faqs' | 'docs' | 'inquiries' | 'schedules' | 'chatbot' | 'accounts'>('design');
+  const [activeAdminTab, setActiveAdminTab] = useState<'design' | 'popup' | 'faqs' | 'docs' | 'inquiries' | 'schedules' | 'chatbot' | 'accounts'>('design');
 
   const pendingInquiriesCount = inquiries.filter((i) => i.status === 'pending').length;
 
@@ -197,6 +199,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveAdminTab('popup')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'popup'
+                ? 'bg-[#1A3B6B] text-white shadow-xs'
+                : 'bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>공지 팝업 관리</span>
+            {config.popupEnabled && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" title="팝업 활성화 상태" />
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveAdminTab('faqs')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
               activeAdminTab === 'faqs'
@@ -286,9 +303,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             faqs={faqs}
             documents={documents}
             schedules={schedules}
-            onExit={() => setActiveAdminTab('faqs')}
+            onExit={() => setActiveAdminTab('popup')}
           />
         )}
+        {activeAdminTab === 'popup' && <NoticePopupManager />}
         {activeAdminTab === 'faqs' && <FaqManager faqs={faqs} setFaqs={setFaqs} />}
         {activeAdminTab === 'docs' && (
           <DocumentManager documents={documents} setDocuments={setDocuments} />

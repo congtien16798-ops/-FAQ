@@ -22,6 +22,7 @@ import { doc, deleteDoc } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
 import { DocumentItem, DocumentFileType } from '../../types';
 import { matchCategory } from '../../services/translator';
+import { triggerDocumentDownload } from '../../services/downloadHelper';
 
 interface DocumentManagerProps {
   documents: DocumentItem[];
@@ -566,17 +567,15 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                       </div>
                       <div className="text-gray-400 text-[11px] font-mono mt-0.5 flex items-center gap-1.5">
                         <span>{docItem.fileName}</span>
-                        {docItem.downloadUrl && docItem.downloadUrl !== '#' && (
-                          <a
-                            href={docItem.downloadUrl}
-                            download={docItem.fileName}
-                            className="text-blue-600 hover:underline flex items-center gap-0.5 text-[10px]"
-                            title="다운로드 테스트"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>다운로드</span>
-                          </a>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => triggerDocumentDownload(docItem)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5 text-[10px] cursor-pointer"
+                          title="다운로드 테스트"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>다운로드</span>
+                        </button>
                       </div>
                     </td>
 

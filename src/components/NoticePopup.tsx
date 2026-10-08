@@ -12,7 +12,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { SiteConfig, PopupIconType, Language } from '../types';
-import { translateText } from '../services/translator';
+import { translateText, translateHtml } from '../services/translator';
 import { translations } from '../constants/translations';
 
 interface NoticePopupProps {
@@ -70,10 +70,15 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
     let isMounted = true;
     const translateNotice = async () => {
       try {
+        const isHtml = /<[a-z][\s\S]*>/i.test(config.popupContent || '');
+        const contentPromise = config.popupContent
+          ? (isHtml ? translateHtml(config.popupContent, currentLang) : translateText(config.popupContent, currentLang))
+          : Promise.resolve('');
+
         const [b, tText, c, l] = await Promise.all([
           config.popupBadge ? translateText(config.popupBadge, currentLang) : Promise.resolve(''),
           config.popupTitle ? translateText(config.popupTitle, currentLang) : Promise.resolve(''),
-          config.popupContent ? translateText(config.popupContent, currentLang) : Promise.resolve(''),
+          contentPromise,
           config.popupLinkText ? translateText(config.popupLinkText, currentLang) : Promise.resolve(''),
         ]);
 
@@ -242,9 +247,16 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
           <h4 className="font-bold text-gray-900 text-sm mb-2 leading-snug">
             {titleText}
           </h4>
-          <p className="whitespace-pre-line text-gray-600 leading-relaxed mb-4 max-h-40 overflow-y-auto">
-            {contentText}
-          </p>
+          {/<[a-z][\s\S]*>/i.test(contentText) ? (
+            <div
+              className="text-gray-600 leading-relaxed mb-4 max-h-52 overflow-y-auto text-xs [&_table]:w-full [&_table]:border-collapse [&_table]:my-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-1.5 [&_th]:bg-gray-100 [&_td]:border [&_td]:border-gray-300 [&_td]:p-1.5 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded [&_img]:my-1.5 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_p]:my-1"
+              dangerouslySetInnerHTML={{ __html: contentText }}
+            />
+          ) : (
+            <p className="whitespace-pre-line text-gray-600 leading-relaxed mb-4 max-h-40 overflow-y-auto">
+              {contentText}
+            </p>
+          )}
 
           {/* Action button if configured */}
           {(config.popupLinkText || config.popupLinkUrl) && (
@@ -332,9 +344,16 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
 
         {/* Content Body */}
         <div className="p-6 text-xs text-gray-700">
-          <div className="whitespace-pre-line text-gray-700 leading-relaxed text-xs md:text-sm bg-gray-50/70 p-4 rounded border border-gray-100 max-h-60 overflow-y-auto mb-5 font-normal">
-            {contentText || '등록된 공지 내용이 없습니다.'}
-          </div>
+          {/<[a-z][\s\S]*>/i.test(contentText) ? (
+            <div
+              className="text-gray-700 leading-relaxed text-xs md:text-sm bg-gray-50/70 p-4 rounded border border-gray-100 max-h-80 overflow-y-auto mb-5 font-normal [&_table]:w-full [&_table]:border-collapse [&_table]:my-2.5 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100 [&_th]:font-semibold [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md [&_img]:my-2.5 [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4 [&_p]:my-1.5"
+              dangerouslySetInnerHTML={{ __html: contentText }}
+            />
+          ) : (
+            <div className="whitespace-pre-line text-gray-700 leading-relaxed text-xs md:text-sm bg-gray-50/70 p-4 rounded border border-gray-100 max-h-60 overflow-y-auto mb-5 font-normal">
+              {contentText || '등록된 공지 내용이 없습니다.'}
+            </div>
+          )}
 
           {/* Action Link button */}
           {(config.popupLinkText || config.popupLinkUrl) && (

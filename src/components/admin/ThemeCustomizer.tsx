@@ -58,7 +58,6 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { KmuLogo } from '../KmuLogo';
-import { NoticePopup, resetNoticeDismissal } from '../NoticePopup';
 import { Navbar } from '../Navbar';
 import { HeroSection } from '../HeroSection';
 import { FaqSection } from '../FaqSection';
@@ -115,10 +114,9 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
   } = useTheme();
 
   const [activeCategoryTab, setActiveCategoryTab] = useState<
-    'brand' | 'logo' | 'hero' | 'archive' | 'popup' | 'footer' | 'mood' | 'chatbot'
+    'brand' | 'logo' | 'hero' | 'archive' | 'footer' | 'mood' | 'chatbot'
   >('brand');
   const [draftSavedToast, setDraftSavedToast] = useState(false);
-  const [previewPopupOpen, setPreviewPopupOpen] = useState(false);
   const [logoPreviewBgDark, setLogoPreviewBgDark] = useState(false);
   const [logoFileNotice, setLogoFileNotice] = useState<string | null>(null);
   const logoFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -135,7 +133,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
 
   // Live Preview Enhancement States (요청 8: 실시간 미리보기 보완 및 개선)
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [previewSection, setPreviewSection] = useState<'all' | 'hero' | 'faq' | 'docs' | 'schedule' | 'inquiry' | 'popup'>('all');
+  const [previewSection, setPreviewSection] = useState<'all' | 'hero' | 'faq' | 'docs' | 'schedule' | 'inquiry'>('all');
   const [previewLang, setPreviewLang] = useState<'ko' | 'en' | 'vi' | 'zh' | 'mn'>('ko');
   const [previewFaqExpanded, setPreviewFaqExpanded] = useState<string | null>('faq-preview-1');
   const [previewSearchText, setPreviewSearchText] = useState('');
@@ -407,15 +405,6 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
 
   return (
     <div className="bg-[#f0f2f5] min-h-[calc(100vh-120px)] p-4 md:p-6">
-      {/* Test Notice Popup if triggered */}
-      {previewPopupOpen && (
-        <NoticePopup
-          config={draftConfig}
-          forceOpen={true}
-          onCloseForceOpen={() => setPreviewPopupOpen(false)}
-        />
-      )}
-
       {/* Top Controller Bar */}
       <div className="max-w-7xl mx-auto bg-white rounded-md border border-[#E2E5E8] p-4 mb-6 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -561,17 +550,6 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
             >
               <Archive className="w-3.5 h-3.5 text-purple-600" />
               <span>보관함 ({archives.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveCategoryTab('popup')}
-              className={`py-2.5 px-3 font-semibold text-center border-b-2 transition-colors whitespace-nowrap flex items-center gap-1 ${
-                activeCategoryTab === 'popup'
-                  ? 'border-[#1A3B6B] text-[#1A3B6B] bg-white'
-                  : 'border-transparent text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5 text-amber-500" />
-              <span>공지 팝업</span>
             </button>
             <button
               onClick={() => setActiveCategoryTab('footer')}
@@ -1533,234 +1511,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
               </div>
             )}
 
-            {/* TAB 5: Notice Popup Settings & Design */}
-            {activeCategoryTab === 'popup' && (
-              <div className="space-y-5">
-                {/* Enable Toggle & Test Button */}
-                <div className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50">
-                  <div>
-                    <span className="font-bold text-gray-900 block text-xs">
-                      공지 팝업 기능 사용
-                    </span>
-                    <span className="text-[11px] text-gray-500 block">
-                      유학생 접속 시 비자 연장, 한국어학당 일정 등 주요 안내 노출
-                    </span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!!draftConfig.popupEnabled}
-                      onChange={(e) => updateDraft({ popupEnabled: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-10 h-5 bg-gray-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2E7D5B]"></div>
-                  </label>
-                </div>
-
-                {/* Test Preview Trigger & Dismissal Reset Buttons */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setPreviewPopupOpen(true)}
-                    className="w-full py-2.5 px-3 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span>실시간 팝업 미리보기 열기</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      resetNoticeDismissal();
-                      setPreviewPopupOpen(true);
-                    }}
-                    className="w-full py-2.5 px-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                    title="방문자의 '오늘 하루 동안 열지 않기' 설정을 초기화하고 즉시 팝업을 엽니다."
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>'오늘 안보기' 초기화 후 열기</span>
-                  </button>
-                </div>
-
-                {/* Popup Layout Style */}
-                <div>
-                  <label className="block font-bold text-gray-800 mb-1.5">
-                    팝업 디자인 형태 (Layout Style)
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => updateDraft({ popupStyle: 'modal' })}
-                      className={`p-3 rounded border text-left transition-all ${
-                        (draftConfig.popupStyle || 'modal') === 'modal'
-                          ? 'border-[#1A3B6B] bg-blue-50/60 ring-1 ring-[#1A3B6B]'
-                          : 'border-gray-200 bg-gray-50 hover:bg-white'
-                      }`}
-                    >
-                      <div className="font-bold text-gray-900 text-xs mb-0.5">🏛️ 중앙 모달 창</div>
-                      <div className="text-[11px] text-gray-500">화면 중앙 집중 (중요/필수 공지용)</div>
-                    </button>
-
-                    <button
-                      onClick={() => updateDraft({ popupStyle: 'banner' })}
-                      className={`p-3 rounded border text-left transition-all ${
-                        draftConfig.popupStyle === 'banner'
-                          ? 'border-[#1A3B6B] bg-blue-50/60 ring-1 ring-[#1A3B6B]'
-                          : 'border-gray-200 bg-gray-50 hover:bg-white'
-                      }`}
-                    >
-                      <div className="font-bold text-gray-900 text-xs mb-0.5">📌 플로팅 배너</div>
-                      <div className="text-[11px] text-gray-500">우측 하단 고정 알림 (비간섭형)</div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Popup Header Color */}
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1.5">
-                    팝업 헤더 테마 색상
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[
-                      { label: '네이비', color: '#1A3B6B' },
-                      { label: '주의 오렌지', color: '#D97736' },
-                      { label: '행정 그린', color: '#2E7D5B' },
-                      { label: '와인 레드', color: '#8B1D2C' },
-                    ].map((col) => (
-                      <button
-                        key={col.color}
-                        onClick={() => updateDraft({ popupColor: col.color })}
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold text-white transition-transform ${
-                          (draftConfig.popupColor || '#1A3B6B') === col.color ? 'scale-105 ring-2 ring-offset-1 ring-gray-400' : 'opacity-80 hover:opacity-100'
-                        }`}
-                        style={{ backgroundColor: col.color }}
-                      >
-                        {col.label}
-                      </button>
-                    ))}
-                    <input
-                      type="color"
-                      value={draftConfig.popupColor || '#1A3B6B'}
-                      onChange={(e) => updateDraft({ popupColor: e.target.value })}
-                      className="w-7 h-7 rounded border border-gray-300 cursor-pointer p-0.5 ml-1"
-                    />
-                  </div>
-                </div>
-
-                {/* Icon Selection */}
-                <div>
-                  <label className="block font-semibold text-gray-700 mb-1.5">
-                    팝업 대표 아이콘
-                  </label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'bell', label: '알림 종', icon: <Bell className="w-3.5 h-3.5" /> },
-                      { id: 'alert', label: '주의/긴급', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
-                      { id: 'calendar', label: '한국어학당 일정', icon: <Calendar className="w-3.5 h-3.5" /> },
-                      { id: 'info', label: '일반안내', icon: <Info className="w-3.5 h-3.5" /> },
-                    ].map((ic) => (
-                      <button
-                        key={ic.id}
-                        onClick={() => updateDraft({ popupIcon: ic.id as any })}
-                        className={`p-2 rounded border flex flex-col items-center gap-1 transition-all ${
-                          (draftConfig.popupIcon || 'bell') === ic.id
-                            ? 'border-[#1A3B6B] bg-blue-50 text-[#1A3B6B] font-bold'
-                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        {ic.icon}
-                        <span className="text-[10px]">{ic.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Popup Texts */}
-                <div className="space-y-3 pt-2 border-t border-gray-100">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-1">
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        상단 뱃지 문구
-                      </label>
-                      <input
-                        type="text"
-                        value={draftConfig.popupBadge || '중요 공지'}
-                        onChange={(e) => updateDraft({ popupBadge: e.target.value })}
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        팝업 제목
-                      </label>
-                      <input
-                        type="text"
-                        value={draftConfig.popupTitle || ''}
-                        onChange={(e) => updateDraft({ popupTitle: e.target.value })}
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-gray-700 mb-1">
-                      팝업 본문 내용 (줄바꿈 지원)
-                    </label>
-                    <textarea
-                      rows={5}
-                      value={draftConfig.popupContent || ''}
-                      onChange={(e) => updateDraft({ popupContent: e.target.value })}
-                      placeholder="공지할 내용을 입력하세요..."
-                      className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white leading-relaxed"
-                    />
-                  </div>
-
-                  {/* Action Link Button Config */}
-                  <div className="space-y-3 pt-2 border-t border-gray-100">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block font-semibold text-gray-700 mb-1">
-                          바로가기 버튼 문구 (선택)
-                        </label>
-                        <input
-                          type="text"
-                          value={draftConfig.popupLinkText || ''}
-                          onChange={(e) => updateDraft({ popupLinkText: e.target.value })}
-                          placeholder="예: 비자 연장 서식 다운로드"
-                          className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-gray-700 mb-1">
-                          클릭 시 이동할 내부 탭
-                        </label>
-                        <select
-                          value={draftConfig.popupLinkTab || 'downloads'}
-                          onChange={(e) => updateDraft({ popupLinkTab: e.target.value as any })}
-                          className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50"
-                        >
-                          <option value="downloads">서식 자료실 (Downloads)</option>
-                          <option value="schedule">한국어학당 학사 일정 (Schedule)</option>
-                          <option value="faq">자주 묻는 질문 (FAQ)</option>
-                          <option value="inquiry">1:1 문의 상담 (Inquiry)</option>
-                          <option value="">링크 없음 (단순 닫기)</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-gray-700 mb-1">
-                        또는 외부 연결 웹사이트 URL (선택)
-                      </label>
-                      <input
-                        type="url"
-                        value={draftConfig.popupLinkUrl || ''}
-                        onChange={(e) => updateDraft({ popupLinkUrl: e.target.value })}
-                        placeholder="예: https://www.hikorea.go.kr (입력 시 새 창으로 이동)"
-                        className="w-full px-2.5 py-1.5 rounded border border-gray-200 text-xs bg-gray-50 focus:bg-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 6: Footer & Related Websites */}
+            {/* TAB 5: Footer & Related Websites */}
             {activeCategoryTab === 'footer' && (
               <div className="space-y-4">
                 <div>
@@ -2673,37 +2424,6 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 }}
                 config={draftConfig}
               />
-
-              {/* Popup Notice Preview if selected */}
-              {previewSection === 'popup' && draftConfig.popupEnabled && (
-                <div className="p-4 bg-amber-50 border-b border-amber-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#1A3B6B] text-white">
-                      {draftConfig.popupBadge || '공지사항'}
-                    </span>
-                    <h4 className="text-xs font-bold text-gray-900">{draftConfig.popupTitle}</h4>
-                  </div>
-                  <p className="text-[11px] text-gray-700 whitespace-pre-line leading-relaxed mb-3">
-                    {draftConfig.popupContent}
-                  </p>
-                  {draftConfig.popupLinkText && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (draftConfig.popupLinkTab) {
-                          setPreviewTab(draftConfig.popupLinkTab);
-                          if (draftConfig.popupLinkTab === 'faq') setPreviewSection('faq');
-                          else if (draftConfig.popupLinkTab === 'downloads') setPreviewSection('docs');
-                        }
-                      }}
-                      className="text-[11px] text-[#1A3B6B] font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>{draftConfig.popupLinkText}</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              )}
 
               {/* Real Hero Section */}
               {(previewSection === 'all' || previewSection === 'hero') && (

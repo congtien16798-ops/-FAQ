@@ -19,6 +19,7 @@ import { ThemeCustomizer } from './components/admin/ThemeCustomizer';
 import { NoticePopup } from './components/NoticePopup';
 import { ChatbotWidget } from './components/ChatbotWidget';
 import { IntegratedSearchResults } from './components/IntegratedSearchResults';
+import { parseShareUrl } from './services/shareHelper';
 
 const LOCAL_FAQS_KEY = 'kmu_faqs_cache';
 const LOCAL_DOCS_KEY = 'kmu_docs_cache';
@@ -41,8 +42,38 @@ function MainApp() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FaqCategory | 'all'>('all');
 
+  const [targetFaqId, setTargetFaqId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const { targetFaqId } = parseShareUrl();
+    return targetFaqId;
+  });
+
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
+
+  // Listen for direct deep links / URL search params / hash
+  useEffect(() => {
+    const handleUrlNavigation = () => {
+      const { targetFaqId: parsedFaqId, targetTab } = parseShareUrl();
+      if (parsedFaqId) {
+        setTargetFaqId(parsedFaqId);
+        setActiveTab('faq');
+        setSearchQuery('');
+        setSelectedCategory('all');
+        if (isDesignMode) setIsDesignMode(false);
+      } else if (targetTab && ['faq', 'downloads', 'inquiry', 'schedule', 'admin'].includes(targetTab)) {
+        setActiveTab(targetTab as any);
+      }
+    };
+
+    handleUrlNavigation();
+    window.addEventListener('popstate', handleUrlNavigation);
+    window.addEventListener('hashchange', handleUrlNavigation);
+    return () => {
+      window.removeEventListener('popstate', handleUrlNavigation);
+      window.removeEventListener('hashchange', handleUrlNavigation);
+    };
+  }, [isDesignMode, setIsDesignMode]);
 
 // Safe reconciliation: never wipe local posts if Firestore snapshot is empty or delayed
   function mergeWithLocalCache<T extends { id: string }>(
@@ -368,6 +399,8 @@ function MainApp() {
                     selectedCategory={selectedCategory}
                     setSelectedCategory={setSelectedCategory}
                     searchQuery={searchQuery}
+                    targetFaqId={targetFaqId}
+                    onClearTargetFaqId={() => setTargetFaqId(null)}
                   />
                 )}
 

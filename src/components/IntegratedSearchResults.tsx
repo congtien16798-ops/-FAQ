@@ -35,6 +35,7 @@ import {
   getTranslatedCategory
 } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
+import { getFaqShareUrl } from '../services/shareHelper';
 
 interface IntegratedSearchResultsProps {
   faqs: FaqItem[];
@@ -379,16 +380,16 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
 
   const handleCopyUrl = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}${window.location.pathname}#faq-${id}`;
+    const url = getFaqShareUrl(id);
     navigator.clipboard.writeText(url).then(() => {
-      setCopyToast(t.urlCopied || 'URL이 복사되었습니다.');
+      setCopyToast(t.urlCopied || '게시글 바로보기 링크가 복사되었습니다.');
       setTimeout(() => setCopyToast(null), 3000);
     });
   };
 
   const handleWebShare = async (faq: FaqItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    const shareUrl = `${window.location.origin}${window.location.pathname}#faq-${faq.id}`;
+    const shareUrl = getFaqShareUrl(faq.id);
     if (navigator.share) {
       try {
         await navigator.share({
