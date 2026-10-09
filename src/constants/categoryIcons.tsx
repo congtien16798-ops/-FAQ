@@ -20,6 +20,8 @@ import {
   Award,
   MapPin,
   Sparkles,
+  Plane,
+  PlaneTakeoff,
   LucideIcon
 } from 'lucide-react';
 
@@ -30,9 +32,11 @@ export interface CategoryIconOption {
 }
 
 export const CATEGORY_ICON_OPTIONS: CategoryIconOption[] = [
+  { id: 'Plane', label: '입국/출국', icon: Plane },
   { id: 'GraduationCap', label: '학사/수업', icon: GraduationCap },
   { id: 'CalendarCheck', label: '출결/일정', icon: CalendarCheck },
   { id: 'FileBadge', label: '비자/체류', icon: FileBadge },
+  { id: 'PlaneTakeoff', label: '출국/이륙', icon: PlaneTakeoff },
   { id: 'FileText', label: '서식/행정', icon: FileText },
   { id: 'Building2', label: '기숙사/캠퍼스', icon: Building2 },
   { id: 'Compass', label: '유학생활', icon: Compass },
@@ -53,6 +57,8 @@ export const CATEGORY_ICON_OPTIONS: CategoryIconOption[] = [
 ];
 
 const ICON_MAP: Record<string, LucideIcon> = {
+  Plane,
+  PlaneTakeoff,
   GraduationCap,
   CalendarCheck,
   FileBadge,
@@ -100,6 +106,24 @@ export const renderCategoryIcon = (iconName?: string, className: string = 'w-4 h
 
   // 3. Fallback by semantic keyword and standard category IDs
   const lower = raw.toLowerCase();
+  if (
+    raw.includes('✈') ||
+    lower.includes('plane') ||
+    lower.includes('flight') ||
+    lower.includes('airport') ||
+    lower.includes('travel') ||
+    lower.includes('immigrat') ||
+    lower.includes('entry') ||
+    lower.includes('exit') ||
+    lower.includes('입출국') ||
+    lower.includes('출입국') ||
+    lower.includes('입국') ||
+    lower.includes('출국') ||
+    lower.includes('항공') ||
+    lower.includes('비행기')
+  ) {
+    return <Plane className={className} />;
+  }
   if (lower.includes('calendar') || lower.includes('date') || lower.includes('attendance') || lower === '출결') {
     return <CalendarCheck className={className} />;
   }

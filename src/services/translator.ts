@@ -724,30 +724,249 @@ export async function detectAndTranslateSearchQuery(
   };
 }
 
+export const STANDARD_CATEGORY_NAMES: Record<string, Record<Language, string>> = {
+  attendance: {
+    ko: '출결/수업',
+    en: 'Attendance & Class',
+    vi: 'Điểm danh & Lớp học',
+    zh: '出勤/课程',
+    mn: 'Ирц / Хичээл',
+  },
+  visa: {
+    ko: '비자/체류',
+    en: 'Visa & Stay',
+    vi: 'Visa & Lưu trú',
+    zh: '签证/居留',
+    mn: 'Виз / Оршин суух',
+  },
+  dormitory: {
+    ko: '기숙사',
+    en: 'Dormitory',
+    vi: 'Ký túc xá',
+    zh: '宿舍',
+    mn: 'Дотуур байр',
+  },
+  admin: {
+    ko: '행정/증명서',
+    en: 'Admin & Forms',
+    vi: 'Hành chính & Hồ sơ',
+    zh: '行政/证明',
+    mn: 'Захиргаа / Тодорхойлолт',
+  },
+  life: {
+    ko: '유학생활',
+    en: 'Campus Life',
+    vi: 'Đời sống du học',
+    zh: '留学生活',
+    mn: 'Оюутны амьдрал',
+  },
+  entryexit: {
+    ko: '입국/출국',
+    en: 'Entry & Exit',
+    vi: 'Xuất nhập cảnh',
+    zh: '出入境',
+    mn: 'Хил нэвтрэх',
+  },
+  entry_exit: {
+    ko: '입국/출국',
+    en: 'Entry & Exit',
+    vi: 'Xuất nhập cảnh',
+    zh: '出入境',
+    mn: 'Хил нэвтрэх',
+  },
+  all: {
+    ko: '전체보기',
+    en: 'All',
+    vi: 'Tất cả',
+    zh: '全部',
+    mn: 'Бүгд',
+  },
+};
+
 /**
- * Normalizes category keys across Korean and English representations.
+ * Normalizes category keys across all 5 languages (KO, EN, VI, ZH, MN)
+ * and custom category configurations.
  */
-export function normalizeCategory(cat: string | undefined | null): string {
+export function normalizeCategory(cat: string | undefined | null, configCategories?: CategoryItem[]): string {
   if (!cat) return '';
-  const c = cat.trim().toLowerCase();
-  if (c === 'all' || c === '전체' || c === '전체보기') return 'all';
-  if (c === 'attendance' || c === '출결/수업' || c === '출결' || c === '수업') return 'attendance';
-  if (c === 'visa' || c === '비자/체류' || c === '비자' || c === '체류') return 'visa';
-  if (c === 'dormitory' || c === '기숙사' || c === '생활관') return 'dormitory';
-  if (c === 'admin' || c === '행정/증명서' || c === '행정' || c === '증명서') return 'admin';
-  if (c === 'life' || c === '유학생활' || c === '생활') return 'life';
-  return c;
+  const raw = cat.trim();
+  const c = raw.toLowerCase().replace(/[\s\-_/&]+/g, ' ');
+
+  // 1. Check custom config categories if provided
+  if (configCategories && configCategories.length > 0) {
+    for (const item of configCategories) {
+      if (item.id && (raw === item.id || c === item.id.toLowerCase())) {
+        return item.id;
+      }
+      if (item.name) {
+        for (const val of Object.values(item.name)) {
+          if (val && (raw === val || c === val.toLowerCase())) {
+            return item.id;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. All / View All
+  if (
+    c === 'all' ||
+    raw === '전체' ||
+    raw === '전체보기' ||
+    c === 'view all' ||
+    c === 'tất cả' ||
+    c === 'xem tất cả' ||
+    raw === '全部' ||
+    raw === '查看全部' ||
+    c === 'бүгд' ||
+    c === 'бүгдийг харах'
+  ) {
+    return 'all';
+  }
+
+  // 3. Attendance / Class
+  if (
+    c === 'attendance' ||
+    c === 'attendance class' ||
+    c === 'attendance and class' ||
+    raw.includes('출결') ||
+    raw.includes('수업') ||
+    raw.includes('출석') ||
+    c.includes('điểm danh') ||
+    c.includes('lớp học') ||
+    c.includes('chuyên cần') ||
+    raw.includes('出勤') ||
+    raw.includes('课程') ||
+    raw.includes('考勤') ||
+    c.includes('ирц') ||
+    c.includes('хичээл')
+  ) {
+    return 'attendance';
+  }
+
+  // 4. Visa / Stay
+  if (
+    c === 'visa' ||
+    c === 'visa stay' ||
+    c === 'visa and stay' ||
+    c === 'stay' ||
+    c === 'immigration' ||
+    raw.includes('비자') ||
+    raw.includes('체류') ||
+    c.includes('thị thực') ||
+    c.includes('lưu trú') ||
+    raw.includes('签证') ||
+    raw.includes('居留') ||
+    c.includes('виз') ||
+    c.includes('оршин суух')
+  ) {
+    return 'visa';
+  }
+
+  // 5. Dormitory
+  if (
+    c === 'dormitory' ||
+    c === 'dorm' ||
+    c === 'residence hall' ||
+    c === 'housing' ||
+    raw.includes('기숙사') ||
+    raw.includes('생활관') ||
+    raw.includes('명교') ||
+    raw.includes('외박') ||
+    c.includes('ký túc xá') ||
+    c.includes('ktx') ||
+    raw.includes('宿舍') ||
+    raw.includes('生活馆') ||
+    c.includes('дотуур байр') ||
+    c.includes('байр')
+  ) {
+    return 'dormitory';
+  }
+
+  // 6. Admin / Forms / Certificates
+  if (
+    c === 'admin' ||
+    c === 'admin forms' ||
+    c === 'admin certificate' ||
+    c === 'admin certificates' ||
+    c === 'administration' ||
+    c === 'forms' ||
+    c === 'certificate' ||
+    c === 'certificates' ||
+    c === 'documents' ||
+    raw.includes('행정') ||
+    raw.includes('증명서') ||
+    raw.includes('서식') ||
+    raw.includes('양식') ||
+    raw.includes('자료실') ||
+    c.includes('hành chính') ||
+    c.includes('giấy tờ') ||
+    c.includes('hồ sơ') ||
+    c.includes('biểu mẫu') ||
+    c.includes('chứng nhận') ||
+    raw.includes('行政') ||
+    raw.includes('证明') ||
+    raw.includes('表格') ||
+    c.includes('захиргаа') ||
+    c.includes('тодорхойлолт') ||
+    c.includes('маягт')
+  ) {
+    return 'admin';
+  }
+
+  // 7. Campus Life
+  if (
+    c === 'life' ||
+    c === 'campus life' ||
+    c === 'student life' ||
+    raw.includes('유학생활') ||
+    raw.includes('캠퍼스생활') ||
+    raw.includes('대학생활') ||
+    c.includes('đời sống du học') ||
+    c.includes('đời sống') ||
+    c.includes('sinh hoạt') ||
+    raw.includes('留学生活') ||
+    raw.includes('校园生活') ||
+    c.includes('оюутны амьдрал') ||
+    c.includes('амьдрал')
+  ) {
+    return 'life';
+  }
+
+  // 8. Entry & Exit (입국/출국)
+  if (
+    c === 'entryexit' ||
+    c === 'entry exit' ||
+    c === 'entry_exit' ||
+    c === 'entry and exit' ||
+    raw.includes('입국') ||
+    raw.includes('출국') ||
+    c.includes('xuất nhập cảnh') ||
+    c.includes('nhập cảnh') ||
+    c.includes('xuất cảnh') ||
+    raw.includes('出入境') ||
+    c.includes('хил нэвтрэх')
+  ) {
+    return 'entryexit';
+  }
+
+  return raw;
 }
 
 /**
- * Checks whether two category identifiers or labels match.
+ * Checks whether two category identifiers or labels match across all languages.
  */
-export function matchCategory(catA: string | undefined | null, catB: string | undefined | null): boolean {
+export function matchCategory(
+  catA: string | undefined | null,
+  catB: string | undefined | null,
+  configCategories?: CategoryItem[]
+): boolean {
   if (!catA || !catB) return false;
-  const normA = normalizeCategory(catA);
-  const normB = normalizeCategory(catB);
+  const normA = normalizeCategory(catA, configCategories);
+  const normB = normalizeCategory(catB, configCategories);
   if (normA === 'all' || normB === 'all') return true;
-  return normA === normB || catA === catB;
+  if (normA === normB) return true;
+  return catA.trim().toLowerCase() === catB.trim().toLowerCase();
 }
 
 /**
@@ -761,39 +980,55 @@ export function getTranslatedCategory(
 ): string {
   if (!category) return '';
   const trimmed = category.trim();
-  const lower = trimmed.toLowerCase();
-  const t = translations[lang] || translations.ko;
 
-  if (lower === 'all' || trimmed === '전체' || trimmed === '전체보기') {
-    return t.categoryAll || '전체보기';
-  }
-  if (lower === 'attendance' || trimmed === '출결/수업' || trimmed === '출결' || trimmed === '수업') {
-    return t.catAttendance || '출결/수업';
-  }
-  if (lower === 'visa' || trimmed === '비자/체류' || trimmed === '비자' || trimmed === '체류') {
-    return t.catVisa || '비자/체류';
-  }
-  if (lower === 'dormitory' || trimmed === '기숙사' || trimmed === '생활관') {
-    return t.catDormitory || '기숙사';
-  }
-  if (lower === 'admin' || trimmed === '행정/증명서' || trimmed === '행정' || trimmed === '증명서') {
-    return t.catAdmin || '행정/증명서';
-  }
-  if (lower === 'life' || trimmed === '유학생활' || trimmed === '생활') {
-    return t.catLife || '유학생활';
-  }
-
-  // Check custom categories if defined
+  // 1. Check custom categories first if explicitly provided
   if (configCategories && configCategories.length > 0) {
-    const found = configCategories.find(
-      (c) => c.id === trimmed || c.id.toLowerCase() === lower || c.name.ko === trimmed
-    );
+    const found = configCategories.find((c) => {
+      if (c.id && c.id.toLowerCase() === trimmed.toLowerCase()) return true;
+      if (c.name) {
+        return (
+          c.name.ko === trimmed ||
+          c.name.en === trimmed ||
+          c.name.vi === trimmed ||
+          c.name.zh === trimmed ||
+          c.name.mn === trimmed
+        );
+      }
+      return false;
+    });
+
     if (found?.name) {
-      if (lang !== 'ko' && found.name[lang] && found.name[lang] !== found.name.ko) {
+      if (lang === 'ko' && found.name.ko) return found.name.ko;
+      if (found.name[lang] && found.name[lang] !== found.name.ko) {
         return found.name[lang]!;
       }
+    }
+  }
+
+  // 2. Standard normalized category lookup (Instant dictionary with zero latency)
+  const norm = normalizeCategory(trimmed, configCategories);
+  const normClean = norm.toLowerCase().replace(/[\s\-_]+/g, '');
+  if (STANDARD_CATEGORY_NAMES[norm]) {
+    return STANDARD_CATEGORY_NAMES[norm][lang] || STANDARD_CATEGORY_NAMES[norm].ko;
+  }
+  if (STANDARD_CATEGORY_NAMES[normClean]) {
+    return STANDARD_CATEGORY_NAMES[normClean][lang] || STANDARD_CATEGORY_NAMES[normClean].ko;
+  }
+
+  // 3. Custom category fallback
+  if (configCategories && configCategories.length > 0) {
+    const found = configCategories.find((c) => c.id === norm || c.id === trimmed || c.name?.ko === trimmed);
+    if (found?.name) {
+      if (lang === 'ko') return found.name.ko || trimmed;
+      if (found.name[lang]) return found.name[lang]!;
       return found.name.ko || trimmed;
     }
+  }
+
+  // 4. Memory cache fallback if available
+  const cacheKey = `ko->${lang}:${trimmed}`;
+  if (memoryCache[cacheKey]) {
+    return memoryCache[cacheKey];
   }
 
   return trimmed;

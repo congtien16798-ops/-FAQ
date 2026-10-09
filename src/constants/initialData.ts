@@ -150,6 +150,17 @@ export const initialSiteConfig: SiteConfig = {
       },
       icon: 'GraduationCap',
     },
+    {
+      id: 'entry_exit',
+      name: {
+        ko: '입국/출국',
+        en: 'Entry & Exit',
+        vi: 'Xuất nhập cảnh',
+        zh: '出入境',
+        mn: 'Хил нэвтрэх',
+      },
+      icon: 'Plane',
+    },
   ],
   // Academic Calendar Settings (현재 학기 정보 설정)
   currentAcademicYear: 2026,

@@ -28,12 +28,12 @@ import {
 } from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
-import { FaqItem, FaqCategory, CategoryItem } from '../../types';
+import { FaqItem, FaqCategory, CategoryItem, Language } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { RichTextEditor } from './RichTextEditor';
 import { optimizeImage } from '../../services/imageOptimizer';
-import { matchCategory } from '../../services/translator';
+import { matchCategory, STANDARD_CATEGORY_NAMES, translateText } from '../../services/translator';
 
 interface FaqManagerProps {
   faqs: FaqItem[];
@@ -372,15 +372,40 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
 
     const cleanId = catId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
     const cleanKo = catNameKo.trim();
+
+    const nameTranslations: CategoryItem['name'] = {
+      ko: cleanKo,
+    };
+    if (STANDARD_CATEGORY_NAMES[cleanId]) {
+      nameTranslations.en = STANDARD_CATEGORY_NAMES[cleanId].en;
+      nameTranslations.vi = STANDARD_CATEGORY_NAMES[cleanId].vi;
+      nameTranslations.zh = STANDARD_CATEGORY_NAMES[cleanId].zh;
+      nameTranslations.mn = STANDARD_CATEGORY_NAMES[cleanId].mn;
+    } else {
+      nameTranslations.en = editingCategory?.name?.en && editingCategory.name.en !== editingCategory.name.ko ? editingCategory.name.en : cleanKo;
+      nameTranslations.vi = editingCategory?.name?.vi && editingCategory.name.vi !== editingCategory.name.ko ? editingCategory.name.vi : cleanKo;
+      nameTranslations.zh = editingCategory?.name?.zh && editingCategory.name.zh !== editingCategory.name.ko ? editingCategory.name.zh : cleanKo;
+      nameTranslations.mn = editingCategory?.name?.mn && editingCategory.name.mn !== editingCategory.name.ko ? editingCategory.name.mn : cleanKo;
+
+      try {
+        const [en, vi, zh, mn] = await Promise.all([
+          translateText(cleanKo, 'en'),
+          translateText(cleanKo, 'vi'),
+          translateText(cleanKo, 'zh'),
+          translateText(cleanKo, 'mn'),
+        ]);
+        if (en && en !== cleanKo) nameTranslations.en = en;
+        if (vi && vi !== cleanKo) nameTranslations.vi = vi;
+        if (zh && zh !== cleanKo) nameTranslations.zh = zh;
+        if (mn && mn !== cleanKo) nameTranslations.mn = mn;
+      } catch {
+        // keep fallback
+      }
+    }
+
     const newCategory: CategoryItem = {
       id: cleanId,
-      name: {
-        ko: cleanKo,
-        en: cleanKo,
-        vi: cleanKo,
-        zh: cleanKo,
-        mn: cleanKo,
-      },
+      name: nameTranslations,
       icon: catIcon,
     };
 
@@ -397,7 +422,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs }) => {
 
     await updateConfig({ categories: updatedList });
     setIsAddingCategory(false);
-    showToast(editingCategory ? '카테고리가 수정되었습니다.' : '새 카테고리가 등록되었습니다.');
+    showToast(editingCategory ? '카테고리가 성공적으로 수정되었습니다.' : '새 카테고리가 등록되었습니다.');
   };
 
   const handleDeleteCategory = async (cat: CategoryItem) => {

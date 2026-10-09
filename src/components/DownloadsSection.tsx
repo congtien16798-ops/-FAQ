@@ -3,7 +3,7 @@ import { FileText, Download, Filter, AlertCircle, FileCheck, CheckCircle2, Globe
 import { DocumentItem, Language } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText, getTranslatedCategory, matchCategory } from '../services/translator';
+import { translateText, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 
@@ -126,14 +126,15 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
   const filteredDocs = (documents || []).filter((doc) => {
     if (!doc || doc.hidden) return false;
-    const matchesCat = selectedCategory === 'all' || matchCategory(doc.category, selectedCategory);
+    const matchesCat = selectedCategory === 'all' || matchCategory(doc.category, selectedCategory, config.categories);
     return matchesCat;
   });
 
   const getCategoryIcon = (catId: string) => {
     if (catId === 'all') return null;
+    const norm = normalizeCategory(catId, config.categories);
     const found = (config.categories || []).find(
-      (c) => c.id === catId || c.name.ko === catId || (c.name as any)[currentLang] === catId
+      (c) => c.id === catId || c.id === norm || c.name.ko === catId || (c.name as any)[currentLang] === catId
     );
     if (found?.icon) return renderCategoryIcon(found.icon);
     return null;
@@ -187,11 +188,14 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
         {/* Categories Bar Under Title (No white box, with count badges) */}
         <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap">
           {categories.map((cat, idx) => {
-            const isSelected = selectedCategory === cat;
+            const isSelected =
+              selectedCategory === cat ||
+              (selectedCategory === 'all' && cat === 'all') ||
+              (selectedCategory !== 'all' && cat !== 'all' && matchCategory(selectedCategory, cat, config.categories));
             const count =
               cat === 'all'
                 ? (documents || []).filter((d) => d && !d.hidden).length
-                : (documents || []).filter((d) => d && !d.hidden && matchCategory(d.category, cat)).length;
+                : (documents || []).filter((d) => d && !d.hidden && matchCategory(d.category, cat, config.categories)).length;
             const icon = getCategoryIcon(cat);
 
             return (

@@ -38,6 +38,10 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Server-side translation memory cache
+const serverTranslationCache = new Map<string, string>();
+let geminiRateLimitedUntil = 0;
+
 // High-Accuracy Multi-language Translation API Endpoint (Specialized for Vietnamese & University Context)
 app.post('/api/translate', async (req, res) => {
   try {
@@ -51,9 +55,22 @@ app.post('/api/translate', async (req, res) => {
       return res.json({ translated: text });
     }
 
+    const trimmed = text.trim();
+    const cacheKey = `${sourceLang}->${targetLang}:${trimmed}`;
+
+    // 1. Check server in-memory cache
+    if (serverTranslationCache.has(cacheKey)) {
+      return res.json({ translated: serverTranslationCache.get(cacheKey) });
+    }
+
+    // 2. Check if currently in Gemini API rate limit cooldown
+    if (Date.now() < geminiRateLimitedUntil) {
+      return res.json({ useFallback: true });
+    }
+
     const ai = getGeminiClient();
     if (!ai) {
-      return res.status(503).json({ error: 'AI Client unavailable', useFallback: true });
+      return res.json({ useFallback: true });
     }
 
     const targetLangNames: Record<string, string> = {
@@ -94,43 +111,39 @@ Translate the following source text (${sourceLang === 'ko' ? 'Korean' : sourceLa
 4. Output ONLY the translated text without conversational filler, markdown code blocks, or greetings.
 
 Source text:
-${text}
+${trimmed}
 `.trim();
 
     let translated = '';
     try {
+      // Use gemini-3.1-flash-lite for high throughput and lower quota consumption
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.1-flash-lite',
         contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
         config: {
-          temperature: 0.2, // Low temperature for high accuracy and deterministic translation
+          temperature: 0.2,
         },
       });
       translated = response.text?.trim() || '';
-    } catch (primaryErr: any) {
-      console.warn('[TranslateAPI] gemini-3.8-flash failed, trying gemini-3.1-flash-lite:', primaryErr?.message || primaryErr);
-      try {
-        const backupResponse = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite',
-          contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
-          config: {
-            temperature: 0.2,
-          },
-        });
-        translated = backupResponse.text?.trim() || '';
-      } catch (backupErr) {
-        console.warn('[TranslateAPI] Both Gemini models failed, instructing client to use fallback:', backupErr);
+    } catch (err: any) {
+      const errStr = String(err?.message || err);
+      if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('RESOURCE_EXHAUSTED')) {
+        // Cooldown for 60 seconds to avoid repeating 429 quota exhaustion
+        geminiRateLimitedUntil = Date.now() + 60000;
       }
     }
 
     if (translated) {
+      if (serverTranslationCache.size > 2000) {
+        serverTranslationCache.clear();
+      }
+      serverTranslationCache.set(cacheKey, translated);
       return res.json({ translated });
     }
 
-    return res.status(500).json({ error: 'Empty translation response', useFallback: true });
-  } catch (error: any) {
-    console.warn('[TranslateAPI] Translation handler error, client will fallback:', error?.message || error);
-    return res.status(500).json({ error: 'Translation error', useFallback: true });
+    return res.json({ useFallback: true });
+  } catch (_error: any) {
+    return res.json({ useFallback: true });
   }
 });
 
@@ -218,8 +231,7 @@ ${faqContext}
           },
         });
         reply = response.text || '';
-      } catch (geminiErr: any) {
-        console.warn('gemini-3.8-flash primary call failed, trying backup model:', geminiErr?.message || geminiErr);
+      } catch (_geminiErr: any) {
         try {
           const fallbackRes = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite',
@@ -233,8 +245,8 @@ ${faqContext}
             },
           });
           reply = fallbackRes.text || '';
-        } catch (backupErr) {
-          console.warn('Backup Gemini call also failed, using knowledge base synthesis:', backupErr);
+        } catch (_backupErr) {
+          // Graceful fallback to knowledge base synthesis below
         }
       }
     }

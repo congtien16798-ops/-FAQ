@@ -72,15 +72,15 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
         );
 
         const catPromises = allCategoryIds.map(async (catId) => {
+          const found = (config.categories || []).find((c) => c.id === catId || c.name?.ko === catId);
+          const koName = found?.name?.ko || catId;
           const direct = getTranslatedCategory(catId, currentLang, config.categories);
-          if (direct && direct !== catId) {
+          if (direct && direct !== catId && direct !== koName) {
             return { id: catId, name: direct };
           }
-          const found = (config.categories || []).find((c) => c.id === catId);
           if (found?.name?.[currentLang] && found.name[currentLang] !== found.name.ko) {
             return { id: catId, name: found.name[currentLang]! };
           }
-          const koName = found?.name?.ko || catId;
           const trans = await translateText(koName, currentLang);
           return { id: catId, name: trans };
         });
@@ -234,12 +234,13 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       catTranslations[category] ||
       getTranslatedCategory(category, currentLang, config.categories);
 
-    const norm = normalizeCategory(category);
+    const norm = normalizeCategory(category, config.categories);
     let color = 'bg-blue-50 text-[#1A3B6B] border-blue-200';
     if (norm === 'visa') color = 'bg-emerald-50 text-emerald-800 border-emerald-200';
     else if (norm === 'dormitory') color = 'bg-indigo-50 text-indigo-800 border-indigo-200';
     else if (norm === 'admin') color = 'bg-amber-50 text-amber-800 border-amber-200';
     else if (norm === 'life') color = 'bg-purple-50 text-purple-800 border-purple-200';
+    else if (norm === 'entryexit' || norm === 'entry_exit') color = 'bg-cyan-50 text-cyan-800 border-cyan-200';
     return { label, color };
   };
 
@@ -273,11 +274,14 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
         {/* Categories Bar Under FAQ Title */}
         <div className="w-full flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar touch-scroll sm:flex-wrap">
           {categories.map((cat, idx) => {
-            const isSelected = selectedCategory === cat.id;
+            const isSelected =
+              selectedCategory === cat.id ||
+              (selectedCategory === 'all' && cat.id === 'all') ||
+              (selectedCategory !== 'all' && cat.id !== 'all' && matchCategory(selectedCategory, cat.id, config.categories));
             const count =
               cat.id === 'all'
                 ? (faqs || []).filter((f) => f && !f.hidden).length
-                : (faqs || []).filter((f) => f && !f.hidden && matchCategory(f.category, cat.id)).length;
+                : (faqs || []).filter((f) => f && !f.hidden && matchCategory(f.category, cat.id, config.categories)).length;
 
             return (
               <button
