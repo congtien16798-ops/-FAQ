@@ -307,7 +307,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           />
         )}
         {activeAdminTab === 'popup' && <NoticePopupManager />}
-        {activeAdminTab === 'faqs' && <FaqManager faqs={faqs} setFaqs={setFaqs} />}
+        {activeAdminTab === 'faqs' && <FaqManager faqs={faqs} setFaqs={setFaqs} documents={documents} />}
         {activeAdminTab === 'docs' && (
           <DocumentManager documents={documents} setDocuments={setDocuments} />
         )}

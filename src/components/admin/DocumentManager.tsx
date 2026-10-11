@@ -406,9 +406,6 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            유학생 신청서, 서약서 등 실제 다운로드 가능한 서식 파일을 업로드하고 관리합니다.
-          </p>
         </div>
 
         <button

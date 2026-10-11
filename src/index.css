@@ -29,12 +29,24 @@ input,
 select,
 textarea,
 optgroup,
-option,
-table,
-th,
-td,
+option {
+  font-family: var(--app-font-family);
+}
+
 [contenteditable] {
-  font-family: var(--app-font-family) !important;
+  font-family: var(--app-font-family);
+}
+
+/* Ensure inline font, size, line-height, and box styles inside contenteditable & prose take priority */
+[contenteditable] font[face],
+.prose font[face] {
+  font-family: attr(face), inherit;
+}
+
+[contenteditable] [style*="font-family"],
+.prose [style*="font-family"],
+.faq-content [style*="font-family"] {
+  font-family: inherit;
 }
 
 body {

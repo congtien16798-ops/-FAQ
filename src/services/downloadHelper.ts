@@ -526,7 +526,28 @@ export const triggerDocumentDownload = (doc: DocumentItem): void => {
   downloadBlob(targetBlob, targetFileName);
 };
 
-function downloadBlob(blob: Blob, fileName: string): void {
+export const triggerAttachmentDownload = (attachment: { name: string; url: string }): void => {
+  if (!attachment || !attachment.url) return;
+  if (attachment.url.startsWith('data:')) {
+    try {
+      const blob = dataUrlToBlob(attachment.url);
+      downloadBlob(blob, attachment.name);
+      return;
+    } catch {
+      // fallback to direct link
+    }
+  }
+  const link = document.createElement('a');
+  link.href = attachment.url;
+  link.download = attachment.name || '첨부파일';
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

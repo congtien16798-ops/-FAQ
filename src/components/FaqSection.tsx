@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Pin, Copy, Share2, Eye, Image as ImageIcon, Check, ExternalLink, Sparkles, Globe } from 'lucide-react';
-import { FaqItem, Language, FaqCategory } from '../types';
+import { ChevronDown, ChevronUp, Pin, Copy, Share2, Eye, Image as ImageIcon, Check, ExternalLink, Sparkles, Globe, Paperclip, Download, FolderDown, FileText } from 'lucide-react';
+import { FaqItem, Language, FaqCategory, DocumentItem } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import { translateText, translateHtml, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 import { getFaqShareUrl } from '../services/shareHelper';
+import { triggerAttachmentDownload, triggerDocumentDownload } from '../services/downloadHelper';
 
 interface FaqSectionProps {
   faqs: FaqItem[];
@@ -15,6 +16,8 @@ interface FaqSectionProps {
   searchQuery: string;
   targetFaqId?: string | null;
   onClearTargetFaqId?: () => void;
+  documents?: DocumentItem[];
+  onNavigateToDownloads?: (category?: string, docId?: string) => void;
 }
 
 export const FaqSection: React.FC<FaqSectionProps> = ({
@@ -25,6 +28,8 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   searchQuery,
   targetFaqId,
   onClearTargetFaqId,
+  documents = [],
+  onNavigateToDownloads,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
@@ -432,11 +437,25 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                 {isExpanded && (
                   <div className="px-3.5 sm:px-5 pb-4 sm:pb-5 pt-2 border-t border-gray-100 text-xs sm:text-sm text-gray-700 leading-relaxed bg-[#fafafa]/50">
                     {/* Render Rich Content with click-to-zoom for embedded images and overflow protection */}
+                    {/* Render Rich Content with click-to-zoom for embedded images and download triggers */}
                     <div
                       onClick={(e) => {
                         const target = e.target as HTMLElement;
                         if (target.tagName === 'IMG') {
                           setModalImage((target as HTMLImageElement).src);
+                          return;
+                        }
+                        const downloadDocBtn = target.closest('.btn-faq-doc-download') as HTMLElement | null;
+                        if (downloadDocBtn) {
+                          e.preventDefault();
+                          const docId = downloadDocBtn.getAttribute('data-doc-id');
+                          if (docId) {
+                            const foundDoc = documents.find((d) => d.id === docId);
+                            if (foundDoc) {
+                              triggerDocumentDownload(foundDoc);
+                              return;
+                            }
+                          }
                         }
                       }}
                       className="prose prose-sm max-w-none text-gray-800 leading-relaxed overflow-x-auto break-word-safe [&_img]:cursor-zoom-in [&_img]:transition-all [&_img:hover]:opacity-95 [&_img]:max-w-full [&_table]:overflow-x-auto [&_table]:block sm:[&_table]:table"
@@ -458,6 +477,130 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                         />
                       </div>
                     )}
+
+                    {/* 6. 게시글 첨부파일 다운로드 (Requirement 6) */}
+                    {faq.attachments && faq.attachments.length > 0 && (
+                      <div className="mt-4 p-3 bg-white rounded-lg border border-emerald-200 shadow-2xs">
+                        <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs mb-2">
+                          <Paperclip className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>게시글 첨부파일 ({faq.attachments.length}개)</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {faq.attachments.map((att) => {
+                            const ext = (att.type || 'file').toLowerCase();
+                            let badgeBg = 'bg-[#1A3B6B]';
+                            if (ext === 'pdf') badgeBg = 'bg-red-600';
+                            else if (ext === 'hwp' || ext === 'hwpx') badgeBg = 'bg-sky-600';
+                            else if (ext === 'docx' || ext === 'doc') badgeBg = 'bg-blue-600';
+                            else if (ext === 'xlsx' || ext === 'xls') badgeBg = 'bg-emerald-600';
+
+                            return (
+                              <div
+                                key={att.id}
+                                className="flex items-center justify-between p-2.5 bg-emerald-50/40 hover:bg-emerald-50 rounded border border-emerald-100 text-xs gap-3 transition-colors"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase shrink-0 ${badgeBg}`}>
+                                    {ext}
+                                  </span>
+                                  <span className="font-semibold text-gray-800 truncate">{att.name}</span>
+                                  <span className="text-[11px] text-gray-400 shrink-0">({att.size})</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => triggerAttachmentDownload(att)}
+                                  className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs transition-colors"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>다운로드</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 7. 관련 행정 서식 자료실 연동 (Requirement 7: 게시글 관련 서식 자료 바로 다운받기) */}
+                    {faq.relatedDocumentIds && faq.relatedDocumentIds.length > 0 && (() => {
+                      const linkedDocs = documents.filter((d) => faq.relatedDocumentIds?.includes(d.id));
+                      if (linkedDocs.length === 0) return null;
+                      return (
+                        <div className="mt-4 p-3.5 bg-indigo-50/50 rounded-lg border border-indigo-200 shadow-2xs">
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
+                              <FolderDown className="w-4 h-4 text-indigo-700" />
+                              <span>관련 서식 및 자료실 바로가기 ({linkedDocs.length}개)</span>
+                            </div>
+                            {onNavigateToDownloads && (
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToDownloads()}
+                                className="text-[11px] text-indigo-700 hover:text-indigo-900 font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <span>서식자료실 전체보기</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            {linkedDocs.map((doc) => {
+                              let typeBadgeBg = 'bg-[#1A3B6B]';
+                              if (doc.fileType === 'pdf') typeBadgeBg = 'bg-red-600';
+                              else if (doc.fileType === 'hwp') typeBadgeBg = 'bg-sky-600';
+                              else if (doc.fileType === 'docx') typeBadgeBg = 'bg-blue-600';
+                              else if (doc.fileType === 'xlsx') typeBadgeBg = 'bg-emerald-600';
+
+                              return (
+                                <div
+                                  key={doc.id}
+                                  className="p-3 bg-white rounded-md border border-indigo-100 hover:border-indigo-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase ${typeBadgeBg}`}>
+                                        {doc.fileType}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
+                                        {doc.category}
+                                      </span>
+                                      <span className="text-[11px] text-gray-400">용량: {doc.fileSize}</span>
+                                    </div>
+                                    <div className="font-bold text-gray-900 text-xs sm:text-sm">
+                                      📄 {doc.title}
+                                    </div>
+                                    {doc.description && (
+                                      <div className="text-[11.5px] text-gray-500 mt-0.5">{doc.description}</div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                                    <button
+                                      type="button"
+                                      onClick={() => triggerDocumentDownload(doc)}
+                                      className="px-3.5 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>즉시 다운로드</span>
+                                    </button>
+                                    {onNavigateToDownloads && (
+                                      <button
+                                        type="button"
+                                        onClick={() => onNavigateToDownloads(doc.category, doc.id)}
+                                        className="px-2.5 py-1.5 rounded bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold text-xs cursor-pointer transition-colors"
+                                      >
+                                        자료실에서 확인
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Action Bar: URL Copy & Web Share */}
                     <div className="mt-4 sm:mt-5 pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-gray-500">

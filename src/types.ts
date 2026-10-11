@@ -26,6 +26,14 @@ export interface CategoryItem {
   icon: string;
 }
 
+export interface FaqAttachment {
+  id: string;
+  name: string;
+  size: string;
+  url: string; // Base64 data URL or external download link
+  type?: string; // pdf, hwp, docx, xlsx, zip, image, etc.
+}
+
 export interface FaqItem {
   id: string;
   category: FaqCategory;
@@ -36,6 +44,8 @@ export interface FaqItem {
   order?: number;
   views?: number;
   imageUrl?: string;
+  attachments?: FaqAttachment[];
+  relatedDocumentIds?: string[]; // IDs linking to DocumentItem in '서식 및 자료실'
   createdAt: string;
   updatedAt: string;
   authorId?: string;

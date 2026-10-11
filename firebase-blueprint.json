@@ -65,6 +65,8 @@
         "pinned": { "type": "boolean", "description": "Whether notice is pinned to top" },
         "views": { "type": "number", "description": "View count" },
         "imageUrl": { "type": "string", "description": "Optional attached reference image URL" },
+        "attachments": { "type": "array", "description": "Attached downloadable documents or forms" },
+        "relatedDocumentIds": { "type": "array", "description": "IDs linking to DocumentItem in downloads repository" },
         "createdAt": { "type": "string", "description": "Creation timestamp" },
         "updatedAt": { "type": "string", "description": "Last modified timestamp" },
         "authorId": { "type": "string", "description": "Author UID" }

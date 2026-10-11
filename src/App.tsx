@@ -401,6 +401,13 @@ function MainApp() {
                     searchQuery={searchQuery}
                     targetFaqId={targetFaqId}
                     onClearTargetFaqId={() => setTargetFaqId(null)}
+                    documents={documents}
+                    onNavigateToDownloads={(cat) => {
+                      setActiveTab('downloads');
+                      if (cat) {
+                        setSelectedCategory(cat as any);
+                      }
+                    }}
                   />
                 )}
 
