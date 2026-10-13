@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
   Palette, 
   Layout, 
@@ -159,38 +159,48 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
     );
   };
 
-  const effectiveFaqs: FaqItem[] = (faqs && faqs.length > 0)
-    ? faqs.filter((f) => !isMockItem(f?.id))
-    : (() => {
-        try {
-          const c = localStorage.getItem('kmu_faqs_cache');
-          return c ? JSON.parse(c).filter((f: any) => !isMockItem(f?.id)) : [];
-        } catch {
-          return [];
-        }
-      })();
+  const effectiveFaqs: FaqItem[] = useMemo(() => {
+    return (faqs && faqs.length > 0)
+      ? faqs.filter((f) => !isMockItem(f?.id))
+      : (() => {
+          try {
+            const c = localStorage.getItem('kmu_faqs_cache');
+            return c ? JSON.parse(c).filter((f: any) => !isMockItem(f?.id)) : [];
+          } catch {
+            return [];
+          }
+        })();
+  }, [faqs]);
 
-  const effectiveDocs: DocumentItem[] = (documents && documents.length > 0)
-    ? documents.filter((d) => !isMockItem(d?.id))
-    : (() => {
-        try {
-          const c = localStorage.getItem('kmu_docs_cache');
-          return c ? JSON.parse(c).filter((d: any) => !isMockItem(d?.id)) : [];
-        } catch {
-          return [];
-        }
-      })();
+  const effectiveDocs: DocumentItem[] = useMemo(() => {
+    return (documents && documents.length > 0)
+      ? documents.filter((d) => !isMockItem(d?.id))
+      : (() => {
+          try {
+            const c = localStorage.getItem('kmu_docs_cache');
+            return c ? JSON.parse(c).filter((d: any) => !isMockItem(d?.id)) : [];
+          } catch {
+            return [];
+          }
+        })();
+  }, [documents]);
 
-  const effectiveSchedules: ScheduleEvent[] = (schedules && schedules.length > 0)
-    ? schedules.filter((s) => !isMockItem(s?.id))
-    : (() => {
-        try {
-          const c = localStorage.getItem('kmu_schedules_cache');
-          return c ? JSON.parse(c).filter((s: any) => !isMockItem(s?.id)) : [];
-        } catch {
-          return [];
-        }
-      })();
+  const effectiveSchedules: ScheduleEvent[] = useMemo(() => {
+    return (schedules && schedules.length > 0)
+      ? schedules.filter((s) => !isMockItem(s?.id))
+      : (() => {
+          try {
+            const c = localStorage.getItem('kmu_schedules_cache');
+            return c ? JSON.parse(c).filter((s: any) => !isMockItem(s?.id)) : [];
+          } catch {
+            return [];
+          }
+        })();
+  }, [schedules]);
+
+  const handleSetPreviewCategory = useCallback((cat: string) => {
+    setPreviewSelectedCategory(cat);
+  }, []);
 
   // Preset themes
   const presets = [
@@ -2432,7 +2442,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   searchQuery={previewSearchText}
                   setSearchQuery={setPreviewSearchText}
                   selectedCategory={previewSelectedCategory as any}
-                  setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                  setSelectedCategory={handleSetPreviewCategory}
                   config={draftConfig}
                 />
               )}
@@ -2442,6 +2452,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 <IntegratedSearchResults
                   faqs={effectiveFaqs}
                   documents={effectiveDocs}
+                  schedules={effectiveSchedules}
                   searchQuery={previewSearchText}
                   onClearSearch={() => setPreviewSearchText('')}
                   currentLang={previewLang}
@@ -2459,9 +2470,10 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   {(previewSection === 'all' || previewSection === 'faq') && previewTab === 'faq' && (
                     <FaqSection
                       faqs={effectiveFaqs}
+                      documents={effectiveDocs}
                       currentLang={previewLang}
                       selectedCategory={previewSelectedCategory as any}
-                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      setSelectedCategory={handleSetPreviewCategory}
                       searchQuery=""
                     />
                   )}
@@ -2472,7 +2484,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       documents={effectiveDocs}
                       currentLang={previewLang}
                       selectedCategory={previewSelectedCategory}
-                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      setSelectedCategory={handleSetPreviewCategory}
                     />
                   )}
 
@@ -2675,7 +2687,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 searchQuery={previewSearchText}
                 setSearchQuery={setPreviewSearchText}
                 selectedCategory={previewSelectedCategory as any}
-                setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                setSelectedCategory={handleSetPreviewCategory}
                 config={draftConfig}
               />
 
@@ -2683,6 +2695,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                 <IntegratedSearchResults
                   faqs={effectiveFaqs}
                   documents={effectiveDocs}
+                  schedules={effectiveSchedules}
                   searchQuery={previewSearchText}
                   onClearSearch={() => setPreviewSearchText('')}
                   currentLang={previewLang}
@@ -2699,9 +2712,10 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                   {previewTab === 'faq' && (
                     <FaqSection
                       faqs={effectiveFaqs}
+                      documents={effectiveDocs}
                       currentLang={previewLang}
                       selectedCategory={previewSelectedCategory as any}
-                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      setSelectedCategory={handleSetPreviewCategory}
                       searchQuery=""
                     />
                   )}
@@ -2710,7 +2724,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       documents={effectiveDocs}
                       currentLang={previewLang}
                       selectedCategory={previewSelectedCategory}
-                      setSelectedCategory={(cat) => setPreviewSelectedCategory(cat)}
+                      setSelectedCategory={handleSetPreviewCategory}
                     />
                   )}
                   {previewTab === 'schedule' && (

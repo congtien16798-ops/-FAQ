@@ -1,4 +1,4 @@
-import { Language, CategoryItem } from '../types';
+import { Language, CategoryItem, DocumentItem } from '../types';
 import { translations } from '../constants/translations';
 
 // In-memory cache for fast instant rendering across the app
@@ -26,6 +26,19 @@ const persistCache = () => {
     persistTimeout = null;
   }, 1000);
 };
+
+/**
+ * Returns cached translation immediately if present in memory, null otherwise.
+ */
+export function getCachedTranslation(
+  text: string,
+  targetLang: Language,
+  sourceLang: string = 'ko'
+): string | null {
+  if (!text || !text.trim() || targetLang === sourceLang) return text;
+  const cacheKey = `${sourceLang}->${targetLang}:${text.trim()}`;
+  return memoryCache[cacheKey] || null;
+}
 
 // Language code mapping for Google Translate API
 const langMap: Record<Language, string> = {
@@ -104,9 +117,16 @@ export function refineVietnameseTranslation(text: string): string {
   // 14. Bank balance certificate (잔고증명서)
   res = res.replace(/chứng nhận số dư/gi, 'Giấy xác nhận số dư tài khoản ngân hàng (잔고증명서)');
 
-  // 15. Keimyung campus names & buildings
   res = res.replace(/khuôn viên Daemyung/gi, 'Cơ sở Daemyung (대명캠퍼스)');
   res = res.replace(/khuôn viên Seongseo/gi, 'Cơ sở Seongseo (성서캠퍼스)');
+
+  // 16. Document, download and hearing terms
+  res = res.replace(/(?:đơn\s+xin\s+)?(?:điều\s+trần\s+công\s+khai|phiên\s+điều\s+trần)/gi, 'đơn xin nghỉ học có phép (công kết)');
+  res = res.replace(/phòng dữ liệu/gi, 'kho tài liệu & biểu mẫu');
+  res = res.replace(/biểu mẫu và phòng dữ liệu/gi, 'biểu mẫu & tài liệu');
+  res = res.replace(/tải xuống ngay lập tức/gi, 'tải xuống ngay');
+  res = res.replace(/đăng đính kèm/gi, 'tệp đính kèm bài viết');
+  res = res.replace(/thông tin gia hạn lưu trú/gi, 'hướng dẫn gia hạn thời gian lưu trú (gia hạn visa)');
 
   return res;
 }
@@ -178,10 +198,10 @@ export async function translateText(
   const sl = sourceLang === 'ko' ? 'ko' : sourceLang;
 
   const fetchPromise = (async () => {
-    // 1. Try server-side AI translation endpoint first (empowered by Gemini 3.8 Flash)
     try {
+      // 1. Try server proxy (which utilizes Gemini Flash Lite + Server Cache + Server GTX)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
 
       const apiRes = await fetch('/api/translate', {
         method: 'POST',
@@ -201,39 +221,32 @@ export async function translateText(
         }
       }
     } catch {
-      // Proceed to fallback
+      // If server times out or fails, gracefully proceed to direct client fallback
     }
 
-    // 2. Fallback to Google Translate GTX endpoint + Domain Post-Processing
+    // 2. High-speed client-side fallback via Google Translate public endpoint
     try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(
-        trimmed
-      )}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Translation HTTP error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data) && Array.isArray(data[0])) {
-        const translatedParts = data[0].map((item: any[]) => item[0]);
-        let fullTranslated = translatedParts.join('');
-        if (fullTranslated) {
-          if (targetLang === 'vi') {
-            fullTranslated = refineVietnameseTranslation(fullTranslated);
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(trimmed)}`;
+      const gtxRes = await fetch(gtxUrl);
+      if (gtxRes.ok) {
+        const gtxData = await gtxRes.json();
+        if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
+          const joined = gtxData[0].map((item: any[]) => item[0]).join('');
+          if (joined) {
+            const finalResult = targetLang === 'vi' ? refineVietnameseTranslation(joined) : joined;
+            memoryCache[cacheKey] = finalResult;
+            persistCache();
+            return finalResult;
           }
-          memoryCache[cacheKey] = fullTranslated;
-          persistCache();
-          return fullTranslated;
         }
       }
-      return text;
-    } catch (err) {
-      console.warn(`[AutoTranslator] Translation failed for [${targetLang}], using original:`, err);
-      return text;
+    } catch (fallbackErr) {
+      console.warn(`[AutoTranslator] Client fallback translation failed for [${targetLang}]:`, fallbackErr);
     } finally {
       pendingRequests.delete(cacheKey);
     }
+
+    return text;
   })();
 
   pendingRequests.set(cacheKey, fetchPromise);
@@ -241,25 +254,113 @@ export async function translateText(
 }
 
 /**
- * Translates multiple texts in parallel with deduplication.
+ * Translates multiple texts in high-speed batches to avoid request throttling and latency.
+ * Reuses pending in-flight requests and deduplicates repeated strings across pages.
  */
 export async function translateTexts(
   texts: string[],
   targetLang: Language,
   sourceLang: string = 'ko'
 ): Promise<string[]> {
-  if (targetLang === sourceLang) return texts;
-  return Promise.all(texts.map((t) => translateText(t, targetLang, sourceLang)));
+  if (targetLang === sourceLang || texts.length === 0) return texts;
+
+  const results: string[] = [];
+  const uncachedMap: { index: number; text: string }[] = [];
+
+  texts.forEach((txt, idx) => {
+    if (!txt || !txt.trim()) {
+      results[idx] = txt;
+      return;
+    }
+    const trimmed = txt.trim();
+    const cacheKey = `${sourceLang}->${targetLang}:${trimmed}`;
+    if (memoryCache[cacheKey]) {
+      results[idx] = memoryCache[cacheKey];
+    } else {
+      uncachedMap.push({ index: idx, text: trimmed });
+    }
+  });
+
+  if (uncachedMap.length === 0) {
+    return results;
+  }
+
+  // Deduplicate unique texts to avoid sending identical words multiple times
+  const uniqueTexts = Array.from(new Set(uncachedMap.map((u) => u.text)));
+
+  // Batch translate uncached texts in chunks of 20
+  const chunkSize = 20;
+  for (let i = 0; i < uniqueTexts.length; i += chunkSize) {
+    const chunk = uniqueTexts.slice(i, i + chunkSize);
+    let chunkTranslations: string[] | null = null;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texts: chunk,
+          targetLang,
+          sourceLang,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.translations) && data.translations.length === chunk.length) {
+          chunkTranslations = data.translations;
+        }
+      }
+    } catch {
+      // Server batch failed or timed out, fallback to individual client translations
+    }
+
+    // Client fallback if server batch failed
+    if (!chunkTranslations) {
+      chunkTranslations = await Promise.all(
+        chunk.map((t) => translateText(t, targetLang, sourceLang))
+      );
+    }
+
+    // Save into memory cache
+    chunk.forEach((txt, cIdx) => {
+      let finalStr = chunkTranslations![cIdx] || txt;
+      if (targetLang === 'vi') finalStr = refineVietnameseTranslation(finalStr);
+      const cKey = `${sourceLang}->${targetLang}:${txt}`;
+      memoryCache[cKey] = finalStr;
+    });
+  }
+
+  persistCache();
+
+  // Populate results for all uncached instances
+  uncachedMap.forEach((item) => {
+    const cKey = `${sourceLang}->${targetLang}:${item.text}`;
+    results[item.index] = memoryCache[cKey] || item.text;
+  });
+
+  // Ensure all indices are filled
+  texts.forEach((txt, idx) => {
+    if (results[idx] === undefined) results[idx] = txt;
+  });
+
+  return results;
 }
 
 /**
- * Safely translates HTML content by parsing DOM and translating only the text nodes.
- * This guarantees 100% preservation of all HTML tags, classes, styles, and attributes.
+ * Safely translates HTML content, automatically translating text nodes as well as
+ * registered forms/material shortcut cards (.faq-doc-shortcut-card, .faq-inline-file-box).
+ * This guarantees 100% preservation of all HTML tags, classes, styles, and download functionality.
  */
 export async function translateHtml(
   html: string,
   targetLang: Language,
-  sourceLang: string = 'ko'
+  sourceLang: string = 'ko',
+  documents: DocumentItem[] = []
 ): Promise<string> {
   if (!html || !html.trim() || targetLang === sourceLang) {
     return html;
@@ -274,16 +375,119 @@ export async function translateHtml(
     const parser = new DOMParser();
     const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html');
 
-    // Collect all text nodes with actual non-whitespace content
+    // 1. Specially translate Document Shortcut Cards (.faq-doc-shortcut-card, .faq-doc-card)
+    const docCards = doc.body.querySelectorAll('.faq-doc-shortcut-card, .faq-doc-card');
+    for (const card of Array.from(docCards)) {
+      const docId = card.getAttribute('data-doc-id');
+      const foundDoc = documents.find((d) => d.id === docId);
+
+      // 1.1 Localize static labels & buttons
+      const textElements = card.querySelectorAll('button, a, span, p, div');
+      textElements.forEach((el) => {
+        // Only target elements that directly hold the label text
+        if (el.children.length > 0) return;
+        const text = el.textContent?.trim();
+        if (!text) return;
+
+        if (text === '서식 및 자료실' || text.includes('서식 및 자료실')) {
+          el.textContent = targetLang === 'vi' ? 'Biểu mẫu & Tài liệu' : targetLang === 'en' ? 'Forms & Documents' : targetLang === 'zh' ? '表格与资料室' : 'Маягт, материал';
+        } else if (text === '즉시 다운로드' || text.includes('즉시 다운로드')) {
+          el.textContent = targetLang === 'vi' ? 'Tải xuống ngay' : targetLang === 'en' ? 'Download Now' : targetLang === 'zh' ? '立即下载' : 'Шууд татах';
+        } else if (text === '자료실 보기' || text.includes('자료실 보기') || text === '자료실에서 확인') {
+          el.textContent = targetLang === 'vi' ? 'Xem tài liệu' : targetLang === 'en' ? 'View Library' : targetLang === 'zh' ? '查看资料' : 'Материал харах';
+        } else if (text.startsWith('용량:')) {
+          const capText = text.replace('용량:', '').trim();
+          const prefix = targetLang === 'vi' ? 'Dung lượng:' : targetLang === 'en' ? 'Size:' : targetLang === 'zh' ? '大小:' : 'Хэмжээ:';
+          el.textContent = `${prefix} ${capText}`;
+        }
+      });
+
+      // 1.2 Translate document category badge
+      const catBadges = card.querySelectorAll('span');
+      for (const span of Array.from(catBadges)) {
+        const text = span.textContent?.trim() || '';
+        const catMatch = text.match(/^\[(.*)\]$/);
+        if (catMatch && catMatch[1]) {
+          const rawCat = catMatch[1];
+          const transCat = await translateText(rawCat, targetLang, sourceLang);
+          span.textContent = `[${transCat}]`;
+        }
+      }
+
+      // 1.3 Translate document title
+      let titleToTranslate = foundDoc?.title || '';
+      // Look for element with 📄 or title
+      let titleEl: HTMLElement | null = null;
+      const divs = card.querySelectorAll('div');
+      for (const d of Array.from(divs)) {
+        if (d.children.length === 0 && d.textContent && (d.textContent.includes('📄') || (titleToTranslate && d.textContent.includes(titleToTranslate)))) {
+          titleEl = d as HTMLElement;
+          if (!titleToTranslate) {
+            titleToTranslate = d.textContent.replace('📄', '').trim();
+          }
+          break;
+        }
+      }
+
+      if (titleToTranslate && titleEl) {
+        const transTitle = await translateText(titleToTranslate, targetLang, sourceLang);
+        titleEl.textContent = `📄 ${transTitle}`;
+      }
+
+      // 1.4 Translate document description
+      let descToTranslate = foundDoc?.description || '';
+      let descEl: HTMLElement | null = null;
+      if (foundDoc?.description) {
+        for (const d of Array.from(divs)) {
+          if (d.children.length === 0 && d.textContent?.includes(foundDoc.description)) {
+            descEl = d as HTMLElement;
+            break;
+          }
+        }
+      }
+      if (descToTranslate && descEl) {
+        const transDesc = await translateText(descToTranslate, targetLang, sourceLang);
+        descEl.textContent = transDesc;
+      }
+    }
+
+    // 2. Specially translate Inline File Attachment Boxes (.faq-inline-file-box)
+    const fileBoxes = doc.body.querySelectorAll('.faq-inline-file-box');
+    for (const box of Array.from(fileBoxes)) {
+      const elements = box.querySelectorAll('a, button, span, div, p');
+      elements.forEach((el) => {
+        if (el.children.length > 0) return;
+        const text = el.textContent?.trim();
+        if (!text) return;
+        if (text === '다운로드') {
+          el.textContent = targetLang === 'vi' ? 'Tải xuống' : targetLang === 'en' ? 'Download' : targetLang === 'zh' ? '下载' : 'Татах';
+        } else if (text.startsWith('파일 크기:')) {
+          const sizePart = text.replace('파일 크기:', '').trim();
+          const prefix = targetLang === 'vi' ? 'Dung lượng:' : targetLang === 'en' ? 'File Size:' : targetLang === 'zh' ? '文件大小:' : 'Файлын хэмжээ:';
+          el.textContent = `${prefix} ${sizePart}`;
+        } else if (text.startsWith('용량:')) {
+          const sizePart = text.replace('용량:', '').trim();
+          const prefix = targetLang === 'vi' ? 'Dung lượng:' : targetLang === 'en' ? 'Size:' : targetLang === 'zh' ? '大小:' : 'Хэмжээ:';
+          el.textContent = `${prefix} ${sizePart}`;
+        }
+      });
+    }
+
+    // 3. Collect all remaining text nodes outside the specially handled cards
     const textNodes: Node[] = [];
     const walker = document.createTreeWalker(
       doc.body,
       NodeFilter.SHOW_TEXT,
       {
         acceptNode(node) {
-          return node.nodeValue && node.nodeValue.trim().length > 0
-            ? NodeFilter.FILTER_ACCEPT
-            : NodeFilter.FILTER_REJECT;
+          if (!node.nodeValue || !node.nodeValue.trim()) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          const parent = node.parentElement;
+          if (parent?.closest('.faq-doc-shortcut-card, .faq-doc-card, .faq-inline-file-box')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_ACCEPT;
         },
       }
     );
@@ -295,7 +499,7 @@ export async function translateHtml(
     }
 
     if (textNodes.length === 0) {
-      return html;
+      return doc.body.innerHTML;
     }
 
     // Extract unique strings

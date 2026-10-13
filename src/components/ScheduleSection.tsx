@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { ScheduleEvent, ScheduleTerm, Language, getScheduleYear } from '../types';
 import { translations } from '../constants/translations';
-import { translateText } from '../services/translator';
+import { translateText, translateTexts, getCachedTranslation } from '../services/translator';
 import { useTheme } from '../context/ThemeContext';
 
 interface ScheduleSectionProps {
@@ -121,7 +121,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
 
   useEffect(() => {
     if (currentLang === 'ko') {
-      setTranslatedMap({});
+      setTranslatedMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
 
@@ -129,22 +129,43 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
     const translateAll = async () => {
       try {
         const validSchedules = (schedules || []).filter(Boolean);
-        const results = await Promise.all(
-          validSchedules.map(async (ev) => {
-            const transTitle = ev.titleEn && currentLang === 'en'
-              ? ev.titleEn
-              : await translateText(ev.title || '', currentLang, 'ko');
-            const transDesc = ev.description
-              ? await translateText(ev.description, currentLang, 'ko')
-              : '';
-            return { id: ev.id, title: transTitle, desc: transDesc };
-          })
-        );
+
+        // Pre-populate already cached schedules immediately for zero-latency UI
+        const initialMap: Record<string, { title: string; desc: string }> = {};
+        validSchedules.forEach((ev) => {
+          const directTitle = ev.titleEn && currentLang === 'en' ? ev.titleEn : getCachedTranslation(ev.title || '', currentLang, 'ko');
+          const directDesc = ev.description ? getCachedTranslation(ev.description, currentLang, 'ko') : '';
+          if (directTitle || directDesc) {
+            initialMap[ev.id] = {
+              title: directTitle || ev.title,
+              desc: directDesc || ev.description || '',
+            };
+          }
+        });
+        if (Object.keys(initialMap).length > 0 && isMounted) {
+          setTranslatedMap((prev) => ({ ...prev, ...initialMap }));
+        }
+
+        // Bulk batch translate titles & descriptions in 2 parallel requests
+        const titlesToTranslate = validSchedules.map((ev) => {
+          if (ev.titleEn && currentLang === 'en') return '';
+          return ev.title || '';
+        });
+        const descsToTranslate = validSchedules.map((ev) => ev.description || '');
+
+        const [transTitles, transDescs] = await Promise.all([
+          translateTexts(titlesToTranslate, currentLang, 'ko'),
+          translateTexts(descsToTranslate, currentLang, 'ko'),
+        ]);
 
         if (isMounted) {
           const map: Record<string, { title: string; desc: string }> = {};
-          results.forEach((r) => {
-            map[r.id] = { title: r.title, desc: r.desc };
+          validSchedules.forEach((ev, idx) => {
+            const titleFinal = ev.titleEn && currentLang === 'en'
+              ? ev.titleEn
+              : transTitles[idx] || ev.title;
+            const descFinal = transDescs[idx] || ev.description || '';
+            map[ev.id] = { title: titleFinal, desc: descFinal };
           });
           setTranslatedMap(map);
         }

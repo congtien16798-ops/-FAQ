@@ -24,6 +24,7 @@ import { doc, deleteDoc } from 'firebase/firestore';
 import { db, safeSetDoc } from '../../firebase';
 import { ScheduleEvent, ScheduleTerm, ScheduleEventType, getScheduleYear } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { markItemAsDeleted } from '../../services/deletedTracker';
 
 interface ScheduleManagerProps {
   schedules: ScheduleEvent[];
@@ -261,6 +262,7 @@ export const ScheduleManager: React.FC<ScheduleManagerProps> = ({
     const target = schedules.find((item) => item.id === id);
     const targetTitle = target?.title || '해당 일정';
 
+    markItemAsDeleted(id);
     const newList = schedules.filter((item) => item.id !== id);
     setSchedules(newList);
     setDeleteTarget(null);

@@ -3,7 +3,7 @@ import { FileText, Download, Filter, AlertCircle, FileCheck, CheckCircle2, Globe
 import { DocumentItem, Language } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
+import { translateText, translateTexts, getTranslatedCategory, matchCategory, normalizeCategory, getCachedTranslation } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 
@@ -36,8 +36,8 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
 
   useEffect(() => {
     if (currentLang === 'ko') {
-      setTransDocMap({});
-      setTransCatMap({});
+      setTransDocMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setTransCatMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       setIsTranslating(false);
       return;
     }
@@ -48,23 +48,45 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
     const translateDocsAndCategories = async () => {
       try {
         const validDocs = (documents || []).filter(Boolean);
-        const docPromises = validDocs.map(async (doc) => {
-          const [transTitle, transDesc, transCat] = await Promise.all([
-            translateText(doc.title || '', currentLang),
-            translateText(doc.description || '', currentLang),
-            translateText(doc.category || '', currentLang),
-          ]);
-          return { id: doc.id, title: transTitle, description: transDesc, category: transCat };
+
+        // Pre-populate already cached items immediately for zero-latency UI
+        const initialDocMap: Record<string, { title: string; description: string; category: string }> = {};
+        validDocs.forEach((d) => {
+          const cTitle = getCachedTranslation(d.title || '', currentLang);
+          const cDesc = d.description ? getCachedTranslation(d.description, currentLang) : '';
+          const cCat = getCachedTranslation(d.category || '', currentLang);
+          if (cTitle || cDesc || cCat) {
+            initialDocMap[d.id] = {
+              title: cTitle || d.title,
+              description: cDesc || d.description || '',
+              category: cCat || d.category || '',
+            };
+          }
         });
+        if (Object.keys(initialDocMap).length > 0 && isMounted) {
+          setTransDocMap((prev) => ({ ...prev, ...initialDocMap }));
+        }
+
+        // Bulk batch translate all document titles, descriptions, and categories in 3 parallel batch calls
+        const docTitles = validDocs.map((d) => d.title || '');
+        const docDescs = validDocs.map((d) => d.description || '');
+        const docCats = validDocs.map((d) => d.category || '');
 
         const uniqueCats = Array.from(
           new Set(
-            (documents || [])
+            validDocs
               .filter((d) => d && d.category && d.category.trim() !== 'all')
               .map((d) => d.category.trim())
           )
         );
 
+        const [transTitles, transDescs, transDocCats] = await Promise.all([
+          translateTexts(docTitles, currentLang),
+          translateTexts(docDescs, currentLang),
+          translateTexts(docCats, currentLang),
+        ]);
+
+        // Category labels
         const catPromises = uniqueCats.map(async (cat) => {
           const direct = getTranslatedCategory(cat, currentLang, config.categories);
           if (direct && direct !== cat) {
@@ -79,15 +101,16 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
           return { cat, label: translated };
         });
 
-        const [docResults, catResults] = await Promise.all([
-          Promise.all(docPromises),
-          Promise.all(catPromises),
-        ]);
+        const catResults = await Promise.all(catPromises);
 
         if (isMounted) {
           const newDocMap: Record<string, { title: string; description: string; category: string }> = {};
-          docResults.forEach((r) => {
-            newDocMap[r.id] = { title: r.title, description: r.description, category: r.category };
+          validDocs.forEach((doc, idx) => {
+            newDocMap[doc.id] = {
+              title: transTitles[idx] || doc.title,
+              description: transDescs[idx] || doc.description,
+              category: transDocCats[idx] || doc.category,
+            };
           });
 
           const newCatMap: Record<string, string> = {};

@@ -33,7 +33,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 }) => {
   const t = translations[currentLang] || translations.ko;
   const themeContext = useTheme();
-  const config = { ...themeContext.config, ...(propConfig || {}) };
+  const config = propConfig || themeContext.config;
 
   // Dynamic categories with automatic translation
   const [catLabels, setCatLabels] = useState<Record<string, string>>({});
@@ -43,10 +43,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
   useEffect(() => {
     if (currentLang === 'ko') {
-      setCatLabels({});
-      setTransHeroTitle('');
-      setTransPlaceholder('');
-      setTransBtnText('');
+      setCatLabels((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setTransHeroTitle((prev) => (!prev ? prev : ''));
+      setTransPlaceholder((prev) => (!prev ? prev : ''));
+      setTransBtnText((prev) => (!prev ? prev : ''));
       return;
     }
 

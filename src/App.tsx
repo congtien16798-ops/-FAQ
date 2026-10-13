@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { db, safeSetDoc } from './firebase';
 import { Language, FaqItem, DocumentItem, InquiryItem, ScheduleEvent, FaqCategory } from './types';
@@ -20,6 +20,7 @@ import { NoticePopup } from './components/NoticePopup';
 import { ChatbotWidget } from './components/ChatbotWidget';
 import { IntegratedSearchResults } from './components/IntegratedSearchResults';
 import { parseShareUrl } from './services/shareHelper';
+import { isItemDeleted } from './services/deletedTracker';
 
 const LOCAL_FAQS_KEY = 'kmu_faqs_cache';
 const LOCAL_DOCS_KEY = 'kmu_docs_cache';
@@ -51,6 +52,13 @@ function MainApp() {
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
+  const isDesignModeRef = useRef(isDesignMode);
+  isDesignModeRef.current = isDesignMode;
+
+  const handleClearTargetFaqId = useCallback(() => {
+    setTargetFaqId(null);
+  }, []);
+
   // Listen for direct deep links / URL search params / hash
   useEffect(() => {
     const handleUrlNavigation = () => {
@@ -60,7 +68,7 @@ function MainApp() {
         setActiveTab('faq');
         setSearchQuery('');
         setSelectedCategory('all');
-        if (isDesignMode) setIsDesignMode(false);
+        if (isDesignModeRef.current) setIsDesignMode(false);
       } else if (targetTab && ['faq', 'downloads', 'inquiry', 'schedule', 'admin'].includes(targetTab)) {
         setActiveTab(targetTab as any);
       }
@@ -73,35 +81,25 @@ function MainApp() {
       window.removeEventListener('popstate', handleUrlNavigation);
       window.removeEventListener('hashchange', handleUrlNavigation);
     };
-  }, [isDesignMode, setIsDesignMode]);
+  }, [setIsDesignMode]);
 
-// Safe reconciliation: never wipe local posts if Firestore snapshot is empty or delayed
-  function mergeWithLocalCache<T extends { id: string }>(
+  // Safe reconciliation: never resurrect deleted items, and prefer live Firestore items
+  function reconcileWithLocal<T extends { id: string }>(
     remoteItems: T[],
-    localKey: string,
-    onMissingInRemote?: (missingItem: T) => void
+    localKey: string
   ): T[] {
+    const cleanRemote = remoteItems.filter((r) => r && r.id && !isItemDeleted(r.id));
+    if (cleanRemote.length > 0) {
+      return cleanRemote;
+    }
     try {
       const cachedStr = localStorage.getItem(localKey);
-      if (!cachedStr) return remoteItems;
+      if (!cachedStr) return [];
       const localItems = JSON.parse(cachedStr) as T[];
-      if (!Array.isArray(localItems) || localItems.length === 0) return remoteItems;
-
-      const remoteIds = new Set(remoteItems.map((r) => r.id));
-      const merged = [...remoteItems];
-
-      for (const localItem of localItems) {
-        if (!localItem || !localItem.id) continue;
-        if (!remoteIds.has(localItem.id)) {
-          merged.push(localItem);
-          if (onMissingInRemote) {
-            onMissingInRemote(localItem);
-          }
-        }
-      }
-      return merged;
+      if (!Array.isArray(localItems)) return [];
+      return localItems.filter((item) => item && item.id && !isItemDeleted(item.id));
     } catch {
-      return remoteItems;
+      return [];
     }
   }
 
@@ -110,7 +108,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_FAQS_KEY);
       if (cached) {
-        return JSON.parse(cached) as FaqItem[];
+        return (JSON.parse(cached) as FaqItem[]).filter((f) => f && f.id && !isItemDeleted(f.id));
       }
       return [];
     } catch {
@@ -123,7 +121,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_DOCS_KEY);
       if (cached) {
-        return JSON.parse(cached) as DocumentItem[];
+        return (JSON.parse(cached) as DocumentItem[]).filter((d) => d && d.id && !isItemDeleted(d.id));
       }
       return [];
     } catch {
@@ -136,7 +134,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_INQUIRIES_KEY);
       if (cached) {
-        return JSON.parse(cached) as InquiryItem[];
+        return (JSON.parse(cached) as InquiryItem[]).filter((i) => i && i.id && !isItemDeleted(i.id));
       }
     } catch {
       // ignore
@@ -149,7 +147,7 @@ function MainApp() {
     try {
       const cached = localStorage.getItem(LOCAL_SCHEDULES_KEY);
       if (cached) {
-        return JSON.parse(cached) as ScheduleEvent[];
+        return (JSON.parse(cached) as ScheduleEvent[]).filter((s) => s && s.id && !isItemDeleted(s.id));
       }
       return [];
     } catch {
@@ -174,9 +172,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as FaqItem);
       });
 
-      const reconciled = mergeWithLocalCache(list, LOCAL_FAQS_KEY, (missing) => {
-        safeSetDoc(doc(db, 'faqs', missing.id), missing).catch(console.warn);
-      });
+      const reconciled = reconcileWithLocal(list, LOCAL_FAQS_KEY);
 
       reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -204,9 +200,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as DocumentItem);
       });
 
-      const reconciled = mergeWithLocalCache(list, LOCAL_DOCS_KEY, (missing) => {
-        safeSetDoc(doc(db, 'documents', missing.id), missing).catch(console.warn);
-      });
+      const reconciled = reconcileWithLocal(list, LOCAL_DOCS_KEY);
 
       reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -234,9 +228,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as InquiryItem);
       });
 
-      const reconciled = mergeWithLocalCache(list, LOCAL_INQUIRIES_KEY, (missing) => {
-        safeSetDoc(doc(db, 'inquiries', missing.id), missing).catch(console.warn);
-      });
+      const reconciled = reconcileWithLocal(list, LOCAL_INQUIRIES_KEY);
 
       reconciled.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -260,9 +252,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as ScheduleEvent);
       });
 
-      const reconciled = mergeWithLocalCache(list, LOCAL_SCHEDULES_KEY, (missing) => {
-        safeSetDoc(doc(db, 'schedules', missing.id), missing).catch(console.warn);
-      });
+      const reconciled = reconcileWithLocal(list, LOCAL_SCHEDULES_KEY);
 
       reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -400,7 +390,7 @@ function MainApp() {
                     setSelectedCategory={setSelectedCategory}
                     searchQuery={searchQuery}
                     targetFaqId={targetFaqId}
-                    onClearTargetFaqId={() => setTargetFaqId(null)}
+                    onClearTargetFaqId={handleClearTargetFaqId}
                     documents={documents}
                     onNavigateToDownloads={(cat) => {
                       setActiveTab('downloads');

@@ -23,6 +23,7 @@ import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../fireb
 import { DocumentItem, DocumentFileType } from '../../types';
 import { matchCategory } from '../../services/translator';
 import { triggerDocumentDownload } from '../../services/downloadHelper';
+import { markItemAsDeleted } from '../../services/deletedTracker';
 
 interface DocumentManagerProps {
   documents: DocumentItem[];
@@ -130,6 +131,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
     const target = documents.find((d) => d.id === id);
     const targetTitle = target?.title || '해당 서식';
 
+    markItemAsDeleted(id);
     const newDocs = documents.filter((d) => d.id !== id);
     setDocuments(newDocs);
     setDeleteTarget(null);

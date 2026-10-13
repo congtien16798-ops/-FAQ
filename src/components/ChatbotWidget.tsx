@@ -134,7 +134,12 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
       setTransBadge(rawBadge);
       setTransWelcome(rawWelcome);
       setTransPlaceholder(rawPlaceholder);
-      setTransSuggestions(rawSuggestions);
+      setTransSuggestions((prev) => {
+        if (prev === rawSuggestions || (prev.length === rawSuggestions.length && prev.every((v, i) => v === rawSuggestions[i]))) {
+          return prev;
+        }
+        return rawSuggestions;
+      });
       return;
     }
 

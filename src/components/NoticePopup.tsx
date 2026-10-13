@@ -12,7 +12,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { SiteConfig, PopupIconType, Language } from '../types';
-import { translateText, translateHtml } from '../services/translator';
+import { translateText, translateHtml, getCachedTranslation } from '../services/translator';
 import { translations } from '../constants/translations';
 
 interface NoticePopupProps {
@@ -57,15 +57,24 @@ export const NoticePopup: React.FC<NoticePopupProps> = ({
   const noticeSignature = `${config.popupTitle || ''}_${(config.popupContent || '').slice(0, 50)}`;
 
   useEffect(() => {
-    // Immediately clear previous translation state when language changes
-    setTransBadge('');
-    setTransTitle('');
-    setTransContent('');
-    setTransLinkText('');
-
     if (!currentLang || currentLang === 'ko') {
+      setTransBadge('');
+      setTransTitle('');
+      setTransContent('');
+      setTransLinkText('');
       return;
     }
+
+    // Instant pre-population from memory cache
+    const cBadge = config.popupBadge ? getCachedTranslation(config.popupBadge, currentLang) : '';
+    const cTitle = config.popupTitle ? getCachedTranslation(config.popupTitle, currentLang) : '';
+    const cLink = config.popupLinkText ? getCachedTranslation(config.popupLinkText, currentLang) : '';
+    const cContent = config.popupContent ? getCachedTranslation(config.popupContent, currentLang) : '';
+
+    if (cBadge) setTransBadge(cBadge);
+    if (cTitle) setTransTitle(cTitle);
+    if (cLink) setTransLinkText(cLink);
+    if (cContent) setTransContent(cContent);
 
     let isMounted = true;
     const translateNotice = async () => {

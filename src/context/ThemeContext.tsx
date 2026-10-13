@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../firebase';
 import { initialSiteConfig } from '../constants/initialData';
@@ -363,27 +363,35 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const effectiveConfig = isDesignMode ? draftConfig : config;
 
+  const contextValue = useMemo(() => ({
+    config: effectiveConfig,
+    draftConfig,
+    liveConfig: config,
+    archives,
+    isDesignMode,
+    setIsDesignMode,
+    updateDraft,
+    updateConfig,
+    saveDraftToLive,
+    resetDraftToLive,
+    resetToFactoryDefaults,
+    createArchiveSnapshot,
+    restoreArchive,
+    deleteArchive,
+    isSaving,
+    saveMessage,
+  }), [
+    effectiveConfig,
+    draftConfig,
+    config,
+    archives,
+    isDesignMode,
+    isSaving,
+    saveMessage,
+  ]);
+
   return (
-    <ThemeContext.Provider
-      value={{
-        config: effectiveConfig,
-        draftConfig,
-        liveConfig: config,
-        archives,
-        isDesignMode,
-        setIsDesignMode,
-        updateDraft,
-        updateConfig,
-        saveDraftToLive,
-        resetDraftToLive,
-        resetToFactoryDefaults,
-        createArchiveSnapshot,
-        restoreArchive,
-        deleteArchive,
-        isSaving,
-        saveMessage,
-      }}
-    >
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );

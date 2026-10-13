@@ -38,6 +38,7 @@ import { RichTextEditor } from './RichTextEditor';
 import { optimizeImage } from '../../services/imageOptimizer';
 import { matchCategory, STANDARD_CATEGORY_NAMES, translateText } from '../../services/translator';
 import { triggerAttachmentDownload, triggerDocumentDownload } from '../../services/downloadHelper';
+import { markItemAsDeleted } from '../../services/deletedTracker';
 
 interface FaqManagerProps {
   faqs: FaqItem[];
@@ -153,6 +154,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     const target = faqs.find((f) => f.id === id);
     const targetTitle = target?.title || '해당 FAQ';
 
+    markItemAsDeleted(id);
     const newFaqs = faqs.filter((f) => f.id !== id);
     setFaqs(newFaqs);
     setDeleteTarget(null);
@@ -1300,163 +1302,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                 />
               </div>
 
-              {/* 6. 게시글 첨부파일 관리 (Requirement 6: 파일 첨부 기능) */}
-              <div className="p-3.5 bg-emerald-50/50 rounded-lg border border-emerald-200">
-                <input
-                  type="file"
-                  ref={faqAttachmentInputRef}
-                  multiple
-                  className="hidden"
-                  onChange={handleUploadAttachment}
-                />
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs">
-                    <Paperclip className="w-4 h-4 text-emerald-700" />
-                    <span>게시글 첨부파일 ({attachments.length}개)</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => faqAttachmentInputRef.current?.click()}
-                    className="px-2.5 py-1 rounded text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 cursor-pointer shadow-2xs flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>파일 첨부 추가 (PDF/HWP/DOCX/ZIP 등)</span>
-                  </button>
-                </div>
 
-                {attachments.length === 0 ? (
-                  <p className="text-[11px] text-emerald-800/80 leading-relaxed">
-                    공지 또는 서식 파일을 첨부하면 학생들이 FAQ를 조회할 때 즉시 다운로드할 수 있습니다.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5 mt-2">
-                    {attachments.map((att) => {
-                      const ext = (att.type || 'file').toLowerCase();
-                      let badgeColor = 'bg-[#1A3B6B] text-white';
-                      if (ext === 'pdf') badgeColor = 'bg-red-600 text-white';
-                      else if (ext === 'hwp' || ext === 'hwpx') badgeColor = 'bg-sky-600 text-white';
-                      else if (ext === 'docx' || ext === 'doc') badgeColor = 'bg-blue-600 text-white';
-                      else if (ext === 'xlsx' || ext === 'xls') badgeColor = 'bg-emerald-600 text-white';
-
-                      return (
-                        <div
-                          key={att.id}
-                          className="flex items-center justify-between p-2 bg-white rounded border border-emerald-200 text-xs gap-2"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${badgeColor}`}>
-                              {ext}
-                            </span>
-                            <span className="font-semibold text-gray-800 truncate">{att.name}</span>
-                            <span className="text-[10px] text-gray-400 shrink-0">({att.size})</span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleInsertAttachmentToContent(att)}
-                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 cursor-pointer"
-                              title="본문 커서 위치에 다운로드 카드 삽입"
-                            >
-                              본문에 삽입
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => triggerAttachmentDownload(att)}
-                              className="p-1 rounded text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 cursor-pointer"
-                              title="다운로드 테스트"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAttachment(att.id)}
-                              className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer"
-                              title="첨부파일 삭제"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* 7. 서식 및 자료실 연동 (Requirement 7: 관련 서식 자료 바로 다운받기) */}
-              <div className="p-3.5 bg-indigo-50/50 rounded-lg border border-indigo-200">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
-                    <FolderDown className="w-4 h-4 text-indigo-700" />
-                    <span>서식 및 자료실 연동 ({relatedDocumentIds.length}개 선택됨)</span>
-                  </div>
-                  <span className="text-[11px] text-indigo-700">
-                    전체 서식 {documents.length}개 중 연동할 자료 선택
-                  </span>
-                </div>
-
-                <p className="text-[11px] text-indigo-800/80 leading-relaxed mb-2.5">
-                  해당 FAQ와 관련된 공식 행정 양식을 체크하면 학생 화면에 ‘관련 서식 바로가기 및 다운로드’가 자동으로 노출되며, ‘본문 삽입’ 클릭 시 본문 중간에도 다운로드 카드가 들어갑니다.
-                </p>
-
-                {documents.length === 0 ? (
-                  <div className="p-2.5 bg-white rounded border border-indigo-100 text-center text-gray-400 text-xs">
-                    등록된 행정 서식이 없습니다. [서식 관리] 탭에서 서식을 먼저 등록해 주세요.
-                  </div>
-                ) : (
-                  <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
-                    {documents.map((doc) => {
-                      const isLinked = relatedDocumentIds.includes(doc.id);
-                      return (
-                        <div
-                          key={doc.id}
-                          className={`p-2 rounded border text-xs flex items-center justify-between gap-2 transition-colors ${
-                            isLinked ? 'bg-indigo-50/80 border-indigo-300' : 'bg-white border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          <label className="flex items-center gap-2 min-w-0 cursor-pointer flex-1">
-                            <input
-                              type="checkbox"
-                              checked={isLinked}
-                              onChange={() => handleToggleRelatedDocument(doc.id)}
-                              className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-gray-900 truncate">{doc.title}</span>
-                                <span className="px-1 py-0.2 rounded text-[10px] font-bold bg-[#1A3B6B] text-white uppercase">
-                                  {doc.fileType}
-                                </span>
-                                <span className="text-[10px] text-gray-500">[{doc.category}]</span>
-                              </div>
-                            </div>
-                          </label>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleInsertDocToContent(doc)}
-                              className="px-2 py-0.5 rounded text-[11px] font-bold text-indigo-700 bg-white border border-indigo-200 hover:bg-indigo-50 cursor-pointer"
-                              title="본문 작성 위치에 서식 바로가기 카드 삽입"
-                            >
-                              본문에 카드 삽입
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => triggerDocumentDownload(doc)}
-                              className="p-1 rounded text-gray-500 hover:text-indigo-700 hover:bg-indigo-50 cursor-pointer"
-                              title="서식 파일 직접 다운로드 확인"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
 
               {/* Hide from students toggle */}
               <div className="p-3 rounded bg-amber-50/70 border border-amber-200">
@@ -1479,21 +1325,40 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                 </label>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 rounded text-gray-700 hover:bg-gray-100 border border-gray-300 font-medium cursor-pointer"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded bg-[#1A3B6B] hover:bg-[#122a4d] text-white font-bold transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? '저장 중...' : '저장 완료'}
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-200">
+                {editingId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentFaq = faqs.find((f) => f.id === editingId);
+                      if (currentFaq) {
+                        setIsEditing(false);
+                        setDeleteTarget(currentFaq);
+                      }
+                    }}
+                    className="px-3.5 py-2 rounded text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>게시글 삭제</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 rounded text-gray-700 hover:bg-gray-100 border border-gray-300 font-medium cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 rounded bg-[#1A3B6B] hover:bg-[#122a4d] text-white font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? '저장 중...' : '저장 완료'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

@@ -14,15 +14,15 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig }) => {
   const t = translations[currentLang] || translations.ko;
   const themeContext = useTheme();
-  const config = { ...themeContext.config, ...(propConfig || {}) };
+  const config = propConfig || themeContext.config;
 
   const [transLocation, setTransLocation] = useState('');
   const [transHours, setTransHours] = useState('');
 
   useEffect(() => {
     if (currentLang === 'ko') {
-      setTransLocation('');
-      setTransHours('');
+      setTransLocation((prev) => (!prev ? prev : ''));
+      setTransHours((prev) => (!prev ? prev : ''));
       return;
     }
 
@@ -59,26 +59,30 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, config: propConfig 
               <Clock className="w-3.5 h-3.5 mt-0.5 text-gray-400 shrink-0" />
               <span>{transHours || config.officeHours}</span>
             </div>
-            <div className="flex items-start gap-2 text-gray-400 pt-0.5">
-              <Phone className="w-3.5 h-3.5 mt-0.5 text-gray-400 shrink-0" />
-              <a
-                href={`tel:${config.phone.replace(/[^0-9+]/g, '')}`}
-                className="hover:text-blue-300 transition-colors underline-offset-2 hover:underline min-h-[28px] inline-flex items-center"
-                title="전화 걸기"
-              >
-                {config.phone}
-              </a>
-            </div>
-            <div className="flex items-start gap-2 text-gray-400">
-              <Mail className="w-3.5 h-3.5 mt-0.5 text-gray-400 shrink-0" />
-              <a
-                href={`mailto:${config.email}`}
-                className="hover:text-blue-300 transition-colors underline-offset-2 hover:underline min-h-[28px] inline-flex items-center break-all"
-                title="이메일 보내기"
-              >
-                {config.email}
-              </a>
-            </div>
+            {config.phone && (
+              <div className="flex items-start gap-2 text-gray-400 pt-0.5">
+                <Phone className="w-3.5 h-3.5 mt-0.5 text-gray-400 shrink-0" />
+                <a
+                  href={`tel:${config.phone.replace(/[^0-9+]/g, '')}`}
+                  className="hover:text-blue-300 transition-colors underline-offset-2 hover:underline min-h-[28px] inline-flex items-center"
+                  title="전화 걸기"
+                >
+                  {config.phone}
+                </a>
+              </div>
+            )}
+            {config.email && (
+              <div className="flex items-start gap-2 text-gray-400">
+                <Mail className="w-3.5 h-3.5 mt-0.5 text-gray-400 shrink-0" />
+                <a
+                  href={`mailto:${config.email}`}
+                  className="hover:text-blue-300 transition-colors underline-offset-2 hover:underline min-h-[28px] inline-flex items-center break-all"
+                  title="이메일 보내기"
+                >
+                  {config.email}
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Col 2: Location */}

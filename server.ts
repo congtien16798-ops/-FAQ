@@ -42,11 +42,188 @@ app.get('/api/health', (_req, res) => {
 const serverTranslationCache = new Map<string, string>();
 let geminiRateLimitedUntil = 0;
 
-// High-Accuracy Multi-language Translation API Endpoint (Specialized for Vietnamese & University Context)
+function serverRefineVietnamese(text: string): string {
+  if (!text) return text;
+  let res = text;
+  res = res.replace(/(?:đơn|thủ tục|hồ sơ|ngày|đăng ký|xin)\s+(?:xin\s+)?(?:thôi việc|từ chức|nghỉ việc)\s+(?:tại|ở)?\s*(?:ký túc xá|KTX)/gi, 'thủ tục trả phòng KTX (rời ký túc xá)');
+  res = res.replace(/thôi việc tại ký túc xá|từ chức ký túc xá|nghỉ việc ký túc xá|thôi việc ktx/gi, 'trả phòng ký túc xá (rời KTX)');
+  res = res.replace(/ngủ bên ngoài|ngủ ngoài/gi, 'nghỉ qua đêm ngoài KTX (ngoại trú)');
+  res = res.replace(/đơn ngủ ngoài/gi, 'đơn xin nghỉ qua đêm ngoài KTX');
+  res = res.replace(/kỳ nghỉ công cộng|nghỉ lễ công cộng/gi, 'nghỉ học có phép (công kết)');
+  res = res.replace(/kết hợp bệnh tật|bệnh tật kết hợp/gi, 'nghỉ ốm có giấy khám bệnh (병결)');
+  res = res.replace(/chứng nhận đăng ký người nước ngoài|thẻ đăng ký người nước ngoài/gi, 'Thẻ đăng ký người nước ngoài (ARC)');
+  res = res.replace(/kéo dài thời gian ở lại|kéo dài thời gian cư trú/gi, 'gia hạn thời gian lưu trú (gia hạn visa)');
+  res = res.replace(/trường học tiếng Hàn|trường tiếng Hàn/gi, 'Viện Ngôn ngữ tiếng Hàn (한국어학당)');
+  res = res.replace(/phí đăng ký học kỳ/gi, 'học phí học kỳ');
+  res = res.replace(/chứng chỉ hoàn thành/gi, 'Giấy chứng nhận hoàn thành khóa học (수료증)');
+  res = res.replace(/giấy phép làm việc bán thời gian/gi, 'Giấy phép làm thêm (시간제 취업 허가서)');
+  res = res.replace(/bảo hiểm y tế quốc gia/gi, 'Bảo hiểm Y tế Quốc gia Hàn Quốc (NHIS)');
+  res = res.replace(/chứng nhận số dư/gi, 'Giấy xác nhận số dư tài khoản ngân hàng (잔고증명서)');
+  res = res.replace(/(?:đơn\s+xin\s+)?(?:điều\s+trần\s+công\s+khai|phiên\s+điều\s+trần)/gi, 'đơn xin nghỉ học có phép (công kết)');
+  res = res.replace(/phòng dữ liệu/gi, 'kho tài liệu & biểu mẫu');
+  res = res.replace(/biểu mẫu và phòng dữ liệu/gi, 'biểu mẫu & tài liệu');
+  res = res.replace(/tải xuống ngay lập tức/gi, 'tải xuống ngay');
+  res = res.replace(/đăng đính kèm/gi, 'tệp đính kèm bài viết');
+  res = res.replace(/thông tin gia hạn lưu trú/gi, 'hướng dẫn gia hạn thời gian lưu trú (gia hạn visa)');
+  return res;
+}
+
+const fetchServerGtxFallback = async (inputStr: string, sl: string, tl: string, targetLang: string): Promise<string> => {
+  try {
+    const trimmed = inputStr.trim();
+    if (!trimmed) return inputStr;
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(trimmed)}`;
+    const gtxRes = await fetch(gtxUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+    });
+    if (gtxRes.ok) {
+      const gtxData = await gtxRes.json();
+      if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
+        const parts = gtxData[0].map((item: any[]) => item[0]).join('');
+        if (parts) {
+          return targetLang === 'vi' ? serverRefineVietnamese(parts) : parts;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Server GTX error:', err);
+  }
+  return inputStr;
+};
+
+// High-Accuracy Multi-language Translation API Endpoint (Single & Batch Support)
 app.post('/api/translate', async (req, res) => {
   try {
-    const { text, targetLang = 'vi', sourceLang = 'ko' } = req.body;
+    const { text, texts, targetLang = 'vi', sourceLang = 'ko' } = req.body;
 
+    const langCodeMap: Record<string, string> = {
+      ko: 'ko',
+      en: 'en',
+      vi: 'vi',
+      mn: 'mn',
+      zh: 'zh-CN',
+    };
+    const tl = langCodeMap[targetLang] || targetLang;
+    const sl = langCodeMap[sourceLang] || sourceLang;
+
+    // 1. Batch translation support
+    if (Array.isArray(texts)) {
+      if (texts.length === 0) {
+        return res.json({ translations: [] });
+      }
+
+      const results: string[] = [];
+      const uncachedIndices: number[] = [];
+      const uncachedTexts: string[] = [];
+
+      texts.forEach((itemText, idx) => {
+        if (!itemText || typeof itemText !== 'string' || !itemText.trim() || targetLang === sourceLang) {
+          results[idx] = itemText || '';
+          return;
+        }
+        const cacheKey = `${sourceLang}->${targetLang}:${itemText.trim()}`;
+        const cachedVal = serverTranslationCache.get(cacheKey);
+        // Only use cache if it was actually translated
+        if (cachedVal && cachedVal.trim() !== itemText.trim()) {
+          results[idx] = cachedVal;
+        } else {
+          uncachedIndices.push(idx);
+          uncachedTexts.push(itemText.trim());
+        }
+      });
+
+      if (uncachedTexts.length > 0) {
+        let batchTranslated: string[] | null = null;
+
+        // Try Gemini AI batch translation first if available
+        const ai = getGeminiClient();
+        if (ai && Date.now() >= geminiRateLimitedUntil) {
+          try {
+            const targetLangNames: Record<string, string> = {
+              vi: 'Vietnamese (Tiếng Việt)',
+              en: 'English',
+              zh: 'Simplified Chinese (简体中文)',
+              mn: 'Mongolian (Монгол хэл)',
+              ko: 'Korean (한국어)',
+            };
+            const targetLangLabel = targetLangNames[targetLang] || targetLang;
+            const prompt = `You are an expert official translator specializing in Keimyung University (계명대학교) Korean Language Institute (한국어학당) and Korean immigration/university administration.
+Translate each item in this JSON array from Korean to natural, accurate, high-quality ${targetLangLabel}.
+
+[TERMINOLOGY & GLOSSARY RULES]:
+1. "한국어학당" -> "Viện Ngôn ngữ tiếng Hàn (ĐH Keimyung)" / "Korean Language Institute" / "韩国语学堂" / "Солонгос хэлний сургууль"
+2. "외국인등록증" -> "Thẻ đăng ký người nước ngoài (ARC)" / "Alien Registration Card" / "外国人登录证"
+3. "체류기간 연장" -> "Gia hạn thời gian lưu trú (Gia hạn visa)" / "Extension of Stay" / "滞留期延期"
+4. "수료 / 수료증 / 수료식" -> "Hoàn thành khóa học / Giấy chứng nhận hoàn thành / Lễ bế giảng (수료식)"
+5. "출결 / 출석률" -> "Điểm danh / Tỷ lệ chuyên cần (출석률)"
+6. "결석 / 공결 / 병결" -> "Vắng mặt / Nghỉ học có phép (Công kết) / Nghỉ ốm có giấy bác sĩ"
+7. "생활관 / 기숙사" -> "Ký túc xá (KTX)" / "Dormitory" / "宿舍"
+8. "기숙사 퇴사" -> "Rời ký túc xá / Trả phòng KTX" (NEVER translate as "từ chức" or "thôi việc"!)
+9. "외박" -> "Nghỉ qua đêm ngoài KTX (Ngoại trú)" / "Overnight Stay" / "外宿"
+10. "등록금" -> "Học phí" / "Tuition" / "学费"
+11. "장학금 / 성적장학금" -> "Học bổng / Học bổng thành tích học tập"
+12. "시간제 취업 (아르바이트)" -> "Việc làm thêm bán thời gian (Part-time)"
+13. "재학증명서 / 성적증명서" -> "Giấy chứng nhận đang theo học / Bảng điểm"
+14. "잔고증명서" -> "Giấy xác nhận số dư tài khoản ngân hàng"
+15. "국민건강보험" -> "Bảo hiểm Y tế Quốc gia Hàn Quốc (NHIS)"
+
+Return ONLY a valid JSON array of translated strings in the exact same order and length. No markdown formatting, no code blocks, just [ ... ].
+Items to translate:
+${JSON.stringify(uncachedTexts)}`;
+
+            const geminiRes = await ai.models.generateContent({
+              model: 'gemini-3.1-flash-lite',
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              config: { temperature: 0.1 },
+            });
+
+            const rawTxt = (geminiRes.text || '').trim();
+            const cleanJson = rawTxt.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
+            const parsed = JSON.parse(cleanJson);
+            if (Array.isArray(parsed) && parsed.length === uncachedTexts.length) {
+              batchTranslated = parsed.map((item: string) => {
+                let s = String(item || '').trim();
+                if (targetLang === 'vi') s = serverRefineVietnamese(s);
+                return s;
+              });
+            }
+          } catch (err: any) {
+            const errStr = String(err?.message || err);
+            if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('RESOURCE_EXHAUSTED')) {
+              geminiRateLimitedUntil = Date.now() + 60000;
+            }
+          }
+        }
+
+        // Fallback to GTX if Gemini failed or was rate-limited
+        if (!batchTranslated) {
+          batchTranslated = await Promise.all(
+            uncachedTexts.map(async (t) => {
+              const trans = await fetchServerGtxFallback(t, sl, tl, targetLang);
+              return trans;
+            })
+          );
+        }
+
+        batchTranslated.forEach((trans, i) => {
+          const originalText = uncachedTexts[i];
+          const finalTrans = trans || originalText;
+          const cacheKey = `${sourceLang}->${targetLang}:${originalText}`;
+          // Only cache if translated successfully
+          if (finalTrans.trim() !== originalText.trim()) {
+            serverTranslationCache.set(cacheKey, finalTrans);
+          }
+          results[uncachedIndices[i]] = finalTrans;
+        });
+      }
+
+      return res.json({ translations: results });
+    }
+
+    // 2. Single text translation
     if (!text || typeof text !== 'string' || !text.trim()) {
       return res.json({ translated: text || '' });
     }
@@ -58,92 +235,83 @@ app.post('/api/translate', async (req, res) => {
     const trimmed = text.trim();
     const cacheKey = `${sourceLang}->${targetLang}:${trimmed}`;
 
-    // 1. Check server in-memory cache
     if (serverTranslationCache.has(cacheKey)) {
       return res.json({ translated: serverTranslationCache.get(cacheKey) });
     }
 
-    // 2. Check if currently in Gemini API rate limit cooldown
-    if (Date.now() < geminiRateLimitedUntil) {
-      return res.json({ useFallback: true });
-    }
-
+    // Check Gemini API first if not rate limited
     const ai = getGeminiClient();
-    if (!ai) {
-      return res.json({ useFallback: true });
-    }
+    if (ai && Date.now() >= geminiRateLimitedUntil) {
+      const targetLangNames: Record<string, string> = {
+        vi: 'Vietnamese (Tiếng Việt)',
+        en: 'English',
+        zh: 'Simplified Chinese (简体中文)',
+        mn: 'Mongolian (Монгол хэл)',
+        ko: 'Korean (한국어)',
+      };
+      const targetLangLabel = targetLangNames[targetLang] || targetLang;
 
-    const targetLangNames: Record<string, string> = {
-      vi: 'Vietnamese (Tiếng Việt)',
-      en: 'English',
-      zh: 'Simplified Chinese (简体中文)',
-      mn: 'Mongolian (Монгол хэл)',
-      ko: 'Korean (한국어)',
-    };
-
-    const targetLangLabel = targetLangNames[targetLang] || targetLang;
-
-    const translationPrompt = `
+      const translationPrompt = `
 You are an expert official translator specializing in Keimyung University (계명대학교) Korean Language Institute (한국어학당) and Korean immigration/university administration.
 Translate the following source text (${sourceLang === 'ko' ? 'Korean' : sourceLang}) into natural, highly accurate, professional ${targetLangLabel}.
 
-[CRITICAL TRANSLATION RULES FOR VIETNAMESE (Tiếng Việt)]:
-1. Use accurate, standard Vietnamese university and administrative terms:
-   - "한국어학당" -> "Viện Ngôn ngữ tiếng Hàn (ĐH Keimyung)" or "Khoa tiếng Hàn"
-   - "외국인등록증" -> "Thẻ đăng ký người nước ngoài (Thẻ cư trú ARC)"
-   - "체류기간 연장" -> "Gia hạn thời gian lưu trú (Gia hạn visa)"
+[CRITICAL TRANSLATION RULES]:
+1. Use standard university & administrative terms:
+   - "한국어학당" -> "Viện Ngôn ngữ tiếng Hàn (ĐH Keimyung)" / "Korean Language Institute" / "韩国语学堂"
+   - "외국인등록증" -> "Thẻ đăng ký người nước ngoài (ARC)" / "Alien Registration Card" / "外国人登录证"
+   - "체류기간 연장" -> "Gia hạn thời gian lưu trú (Gia hạn visa)" / "Extension of Stay" / "滞留期延期"
    - "수료 / 수료증 / 수료식" -> "Hoàn thành khóa học / Giấy chứng nhận hoàn thành / Lễ bế giảng (수료식)"
    - "출결 / 출석률" -> "Điểm danh / Tỷ lệ chuyên cần (출석률)"
    - "결석 / 공결 / 병결" -> "Vắng mặt / Nghỉ học có phép (Công kết) / Nghỉ ốm có giấy bác sĩ"
-   - "생활관 / 기숙사" -> "Ký túc xá (KTX)"
+   - "생활관 / 기숙사" -> "Ký túc xá (KTX)" / "Dormitory" / "宿舍"
    - "기숙사 퇴사" -> "Rời ký túc xá / Trả phòng KTX" (NEVER translate as "từ chức" or "thôi việc"!)
-   - "외박" -> "Nghỉ qua đêm ngoài KTX (Ngoại trú)"
-   - "등록금" -> "Học phí"
+   - "외박" -> "Nghỉ qua đêm ngoài KTX (Ngoại trú)" / "Overnight Stay" / "外宿"
+   - "등록금" -> "Học phí" / "Tuition" / "学费"
    - "장학금 / 성적장학금" -> "Học bổng / Học bổng thành tích học tập"
    - "시간제 취업 (아르바이트)" -> "Việc làm thêm bán thời gian (Part-time)"
    - "재학증명서 / 성적증명서" -> "Giấy chứng nhận đang theo học / Bảng điểm"
    - "잔고증명서" -> "Giấy xác nhận số dư tài khoản ngân hàng"
-   - "하이코리아" -> "Cổng điện tử Hi Korea (hikorea.go.kr)"
    - "국민건강보험" -> "Bảo hiểm Y tế Quốc gia Hàn Quốc (NHIS)"
-   - "동영관 / 바우어관 / 명교생활관" -> "Tòa Dongyeong (동영관) / Tòa Bauer (바우어관) / KTX Myeonggyo (명교생활관)"
-2. Preserve all line breaks, numbers, bullet points, phone numbers (e.g. 053-580-6923), URLs, and room numbers.
-3. Keep the tone courteous, clear, and reassuring for international students.
-4. Output ONLY the translated text without conversational filler, markdown code blocks, or greetings.
+2. Preserve numbers, dates, bullet points, phone numbers, and formatting.
+3. Output ONLY the translated text.
 
 Source text:
 ${trimmed}
 `.trim();
 
-    let translated = '';
-    try {
-      // Use gemini-3.1-flash-lite for high throughput and lower quota consumption
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
-        config: {
-          temperature: 0.2,
-        },
-      });
-      translated = response.text?.trim() || '';
-    } catch (err: any) {
-      const errStr = String(err?.message || err);
-      if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('RESOURCE_EXHAUSTED')) {
-        // Cooldown for 60 seconds to avoid repeating 429 quota exhaustion
-        geminiRateLimitedUntil = Date.now() + 60000;
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: [{ role: 'user', parts: [{ text: translationPrompt }] }],
+          config: {
+            temperature: 0.2,
+          },
+        });
+        let translated = response.text?.trim() || '';
+        if (translated) {
+          if (targetLang === 'vi') {
+            translated = serverRefineVietnamese(translated);
+          }
+          if (serverTranslationCache.size > 3000) serverTranslationCache.clear();
+          serverTranslationCache.set(cacheKey, translated);
+          return res.json({ translated });
+        }
+      } catch (err: any) {
+        const errStr = String(err?.message || err);
+        if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('RESOURCE_EXHAUSTED')) {
+          geminiRateLimitedUntil = Date.now() + 60000;
+        }
       }
     }
 
-    if (translated) {
-      if (serverTranslationCache.size > 2000) {
-        serverTranslationCache.clear();
-      }
-      serverTranslationCache.set(cacheKey, translated);
-      return res.json({ translated });
+    // High reliability GTX fallback executed on server
+    const fallbackText = await fetchServerGtxFallback(trimmed, sl, tl, targetLang);
+    if (fallbackText && fallbackText.trim() !== trimmed) {
+      serverTranslationCache.set(cacheKey, fallbackText);
     }
-
-    return res.json({ useFallback: true });
+    return res.json({ translated: fallbackText });
   } catch (_error: any) {
-    return res.json({ useFallback: true });
+    return res.json({ translated: req.body?.text || '' });
   }
 });
 

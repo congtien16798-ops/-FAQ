@@ -20,6 +20,7 @@ import { db, safeSetDoc, safeUpdateDoc, handleFirestoreError, OperationType } fr
 import { InquiryItem, InquiryStatus, Language } from '../../types';
 import { translateText } from '../../services/translator';
 import { InquirySettings } from './InquirySettings';
+import { markItemAsDeleted } from '../../services/deletedTracker';
 
 interface InquiryManagerProps {
   inquiries: InquiryItem[];
@@ -194,6 +195,7 @@ export const InquiryManager: React.FC<InquiryManagerProps> = ({
     const target = inquiries.find((item) => item.id === id);
     const targetName = target ? `${target.name} (${target.studentId})` : '해당 문의';
 
+    markItemAsDeleted(id);
     const newInquiries = inquiries.filter((item) => item.id !== id);
     setInquiries(newInquiries);
     if (selectedInquiry?.id === id) setSelectedInquiry(null);

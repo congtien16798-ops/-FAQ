@@ -25,7 +25,9 @@ import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
 import {
   translateText,
+  translateTexts,
   translateHtml,
+  getCachedTranslation,
   detectLanguage,
   getLangMeta,
   detectAndTranslateSearchQuery,
@@ -48,10 +50,12 @@ interface IntegratedSearchResultsProps {
   onSelectLanguage?: (lang: Language) => void;
 }
 
+const EMPTY_SCHEDULES: ScheduleEvent[] = [];
+
 export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = ({
   faqs,
   documents,
-  schedules = [],
+  schedules = EMPTY_SCHEDULES,
   searchQuery,
   onClearSearch,
   currentLang,
@@ -107,48 +111,69 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
 
   useEffect(() => {
     if (effectiveDisplayLang === 'ko') {
-      setTransFaqMap({});
-      setTransDocMap({});
-      setTransScheduleMap({});
-      setCatTranslations({});
+      setTransFaqMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setTransDocMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setTransScheduleMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setCatTranslations((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
 
     let isMounted = true;
     const translateSearchResults = async () => {
       try {
-        // 1. FAQs in parallel
-        const faqPromises = faqs.map(async (faq) => {
-          if (!faq) return null;
-          const [transTitle, transContent] = await Promise.all([
-            translateText(faq.title || '', effectiveDisplayLang),
-            translateHtml(faq.content || '', effectiveDisplayLang),
-          ]);
-          return { id: faq.id, title: transTitle, content: transContent };
+        const validFaqs = faqs.filter(Boolean);
+        const validDocs = documents.filter(Boolean);
+        const validSchedules = schedules.filter(Boolean);
+
+        // Instant cache pre-population for zero latency
+        const initialFaqMap: Record<string, { title: string; content: string }> = {};
+        validFaqs.forEach((f) => {
+          const ct = getCachedTranslation(f.title || '', effectiveDisplayLang);
+          const cc = getCachedTranslation(f.content || '', effectiveDisplayLang);
+          if (ct || cc) initialFaqMap[f.id] = { title: ct || f.title, content: cc || f.content };
         });
 
-        // 2. Docs in parallel
-        const docPromises = documents.map(async (doc) => {
-          if (!doc) return null;
-          const [transTitle, transDesc] = await Promise.all([
-            translateText(doc.title || '', effectiveDisplayLang),
-            doc.description ? translateText(doc.description, effectiveDisplayLang) : Promise.resolve(''),
-          ]);
-          return { id: doc.id, title: transTitle, description: transDesc };
+        const initialDocMap: Record<string, { title: string; description: string }> = {};
+        validDocs.forEach((d) => {
+          const ct = getCachedTranslation(d.title || '', effectiveDisplayLang);
+          const cd = d.description ? getCachedTranslation(d.description, effectiveDisplayLang) : '';
+          if (ct || cd) initialDocMap[d.id] = { title: ct || d.title, description: cd || d.description || '' };
         });
 
-        // 3. Schedules in parallel
-        const schPromises = schedules.map(async (sch) => {
-          if (!sch) return null;
-          const [transTitle, transDesc, transLoc] = await Promise.all([
-            translateText(sch.title || '', effectiveDisplayLang),
-            sch.description ? translateText(sch.description, effectiveDisplayLang) : Promise.resolve(''),
-            sch.location && sch.location !== '-' ? translateText(sch.location, effectiveDisplayLang) : Promise.resolve(''),
-          ]);
-          return { id: sch.id, title: transTitle, description: transDesc, location: transLoc };
+        const initialSchMap: Record<string, { title: string; description: string; location: string }> = {};
+        validSchedules.forEach((s) => {
+          const ct = s.titleEn && effectiveDisplayLang === 'en' ? s.titleEn : getCachedTranslation(s.title || '', effectiveDisplayLang);
+          const cd = s.description ? getCachedTranslation(s.description, effectiveDisplayLang) : '';
+          if (ct || cd) initialSchMap[s.id] = { title: ct || s.title, description: cd || s.description || '', location: s.location || '' };
         });
 
-        // 4. Categories
+        if (isMounted) {
+          if (Object.keys(initialFaqMap).length > 0) setTransFaqMap((p) => ({ ...p, ...initialFaqMap }));
+          if (Object.keys(initialDocMap).length > 0) setTransDocMap((p) => ({ ...p, ...initialDocMap }));
+          if (Object.keys(initialSchMap).length > 0) setTransScheduleMap((p) => ({ ...p, ...initialSchMap }));
+        }
+
+        // 1. Bulk batch translate FAQ titles, Document titles/descriptions, and Schedule titles/descriptions
+        const faqTitles = validFaqs.map((f) => f.title || '');
+        const docTitles = validDocs.map((d) => d.title || '');
+        const docDescs = validDocs.map((d) => d.description || '');
+        const schTitles = validSchedules.map((s) => (s.titleEn && effectiveDisplayLang === 'en' ? '' : s.title || ''));
+        const schDescs = validSchedules.map((s) => s.description || '');
+
+        const [tFaqTitles, tDocTitles, tDocDescs, tSchTitles, tSchDescs] = await Promise.all([
+          translateTexts(faqTitles, effectiveDisplayLang),
+          translateTexts(docTitles, effectiveDisplayLang),
+          translateTexts(docDescs, effectiveDisplayLang),
+          translateTexts(schTitles, effectiveDisplayLang),
+          translateTexts(schDescs, effectiveDisplayLang),
+        ]);
+
+        // 2. FAQs content in progressive chunks
+        const tFaqContents = await Promise.all(
+          validFaqs.map((faq) => translateHtml(faq.content || '', effectiveDisplayLang))
+        );
+
+        // 3. Categories
         const catPromises = (config.categories || []).map(async (cat) => {
           const direct = getTranslatedCategory(cat.id, effectiveDisplayLang, config.categories);
           if (direct && direct !== cat.id) {
@@ -161,27 +186,23 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
           return { id: cat.id, name: translated };
         });
 
-        const [faqResults, docResults, schResults, catResults] = await Promise.all([
-          Promise.all(faqPromises),
-          Promise.all(docPromises),
-          Promise.all(schPromises),
-          Promise.all(catPromises),
-        ]);
+        const catResults = await Promise.all(catPromises);
 
         if (isMounted) {
           const newFaqMap: Record<string, { title: string; content: string }> = {};
-          faqResults.forEach((r) => {
-            if (r) newFaqMap[r.id] = { title: r.title, content: r.content };
+          validFaqs.forEach((f, idx) => {
+            newFaqMap[f.id] = { title: tFaqTitles[idx] || f.title, content: tFaqContents[idx] || f.content };
           });
 
           const newDocMap: Record<string, { title: string; description: string }> = {};
-          docResults.forEach((r) => {
-            if (r) newDocMap[r.id] = { title: r.title, description: r.description };
+          validDocs.forEach((d, idx) => {
+            newDocMap[d.id] = { title: tDocTitles[idx] || d.title, description: tDocDescs[idx] || d.description || '' };
           });
 
           const newScheduleMap: Record<string, { title: string; description: string; location: string }> = {};
-          schResults.forEach((r) => {
-            if (r) newScheduleMap[r.id] = { title: r.title, description: r.description, location: r.location };
+          validSchedules.forEach((s, idx) => {
+            const finalTitle = s.titleEn && effectiveDisplayLang === 'en' ? s.titleEn : tSchTitles[idx] || s.title;
+            newScheduleMap[s.id] = { title: finalTitle, description: tSchDescs[idx] || s.description || '', location: s.location || '' };
           });
 
           const newCatMap: Record<string, string> = {};

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronDown, ChevronUp, Pin, Copy, Share2, Eye, Image as ImageIcon, Check, ExternalLink, Sparkles, Globe, Paperclip, Download, FolderDown, FileText } from 'lucide-react';
 import { FaqItem, Language, FaqCategory, DocumentItem } from '../types';
 import { translations } from '../constants/translations';
 import { useTheme } from '../context/ThemeContext';
-import { translateText, translateHtml, getTranslatedCategory, matchCategory, normalizeCategory } from '../services/translator';
+import { translateText, translateTexts, translateHtml, getTranslatedCategory, matchCategory, normalizeCategory, getCachedTranslation } from '../services/translator';
 import { renderCategoryIcon } from '../constants/categoryIcons';
 import { getFaqShareUrl } from '../services/shareHelper';
 import { triggerAttachmentDownload, triggerDocumentDownload } from '../services/downloadHelper';
@@ -20,6 +20,8 @@ interface FaqSectionProps {
   onNavigateToDownloads?: (category?: string, docId?: string) => void;
 }
 
+const EMPTY_DOCS: DocumentItem[] = [];
+
 export const FaqSection: React.FC<FaqSectionProps> = ({
   faqs,
   currentLang,
@@ -28,7 +30,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   searchQuery,
   targetFaqId,
   onClearTargetFaqId,
-  documents = [],
+  documents = EMPTY_DOCS,
   onNavigateToDownloads,
 }) => {
   const t = translations[currentLang] || translations.ko;
@@ -41,14 +43,16 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
   // Auto Translation State
   const [translatedMap, setTranslatedMap] = useState<Record<string, { title: string; content: string }>>({});
+  const [transDocMap, setTransDocMap] = useState<Record<string, { title: string; description: string; category: string }>>({});
   const [catTranslations, setCatTranslations] = useState<Record<string, string>>({});
   const [isTranslating, setIsTranslating] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
   useEffect(() => {
     if (currentLang === 'ko') {
-      setTranslatedMap({});
-      setCatTranslations({});
+      setTranslatedMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setTransDocMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      setCatTranslations((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       setIsTranslating(false);
       return;
     }
@@ -58,56 +62,123 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
     const translateAll = async () => {
       try {
-        // 1. FAQs title & rich HTML content in parallel
-        const validFaqs = (faqs || []).filter(Boolean);
-        const faqPromises = validFaqs.map(async (faq) => {
-          const [transTitle, transContent] = await Promise.all([
-            translateText(faq.title || '', currentLang),
-            translateHtml(faq.content || '', currentLang),
+        // 1. Documents translation (for related forms & materials at bottom and inside FAQ content)
+        const validDocs = (documents || []).filter(Boolean);
+        if (validDocs.length > 0) {
+          const docTitles = validDocs.map((d) => d.title || '');
+          const docDescs = validDocs.map((d) => d.description || '');
+          const docCats = validDocs.map((d) => d.category || '');
+
+          const [transTitles, transDescs, transCats] = await Promise.all([
+            translateTexts(docTitles, currentLang),
+            translateTexts(docDescs, currentLang),
+            translateTexts(docCats, currentLang),
           ]);
-          return { id: faq.id, title: transTitle, content: transContent };
-        });
+
+          if (isMounted) {
+            const newDocMap: Record<string, { title: string; description: string; category: string }> = {};
+            validDocs.forEach((doc, idx) => {
+              newDocMap[doc.id] = {
+                title: transTitles[idx] || doc.title,
+                description: transDescs[idx] || doc.description,
+                category: transCats[idx] || doc.category,
+              };
+            });
+            setTransDocMap(newDocMap);
+          }
+        }
 
         // 2. Category names for badges in parallel
         const allCategoryIds = Array.from(
           new Set([
             ...(config.categories || []).map((c) => c.id),
             ...(faqs || []).map((f) => f.category).filter(Boolean),
+            ...(documents || []).map((d) => d.category).filter(Boolean),
           ])
         );
 
-        const catPromises = allCategoryIds.map(async (catId) => {
+        const catKoNames = allCategoryIds.map((catId) => {
           const found = (config.categories || []).find((c) => c.id === catId || c.name?.ko === catId);
-          const koName = found?.name?.ko || catId;
-          const direct = getTranslatedCategory(catId, currentLang, config.categories);
-          if (direct && direct !== catId && direct !== koName) {
-            return { id: catId, name: direct };
-          }
-          if (found?.name?.[currentLang] && found.name[currentLang] !== found.name.ko) {
-            return { id: catId, name: found.name[currentLang]! };
-          }
-          const trans = await translateText(koName, currentLang);
-          return { id: catId, name: trans };
+          return found?.name?.ko || catId;
         });
-
-        const [faqResults, catResults] = await Promise.all([
-          Promise.all(faqPromises),
-          Promise.all(catPromises),
-        ]);
+        const transCatNames = await translateTexts(catKoNames, currentLang);
 
         if (isMounted) {
-          const newMap: Record<string, { title: string; content: string }> = {};
-          faqResults.forEach((r) => {
-            newMap[r.id] = { title: r.title, content: r.content };
-          });
-
           const newCatMap: Record<string, string> = {};
-          catResults.forEach((r) => {
-            newCatMap[r.id] = r.name;
+          allCategoryIds.forEach((catId, idx) => {
+            const direct = getTranslatedCategory(catId, currentLang, config.categories);
+            if (direct && direct !== catId) {
+              newCatMap[catId] = direct;
+            } else {
+              newCatMap[catId] = transCatNames[idx] || catId;
+            }
           });
-
-          setTranslatedMap(newMap);
           setCatTranslations(newCatMap);
+        }
+
+        // 3. FAQs: instant cache pre-population + bulk title translation + progressive content translation
+        const validFaqs = (faqs || []).filter(Boolean);
+
+        // 3.1 Pre-populate already cached titles & contents synchronously for instant zero-latency display
+        const initialMap: Record<string, { title: string; content: string }> = {};
+        validFaqs.forEach((faq) => {
+          const cachedTitle = getCachedTranslation(faq.title || '', currentLang);
+          const cachedContent = getCachedTranslation(faq.content || '', currentLang);
+          if (cachedTitle || cachedContent) {
+            initialMap[faq.id] = {
+              title: cachedTitle || faq.title,
+              content: cachedContent || faq.content,
+            };
+          }
+        });
+        if (Object.keys(initialMap).length > 0 && isMounted) {
+          setTranslatedMap((prev) => ({ ...prev, ...initialMap }));
+        }
+
+        // 3.2 High-speed bulk translation of ALL FAQ titles in a single batch
+        const allTitles = validFaqs.map((f) => f.title || '');
+        const translatedTitles = await translateTexts(allTitles, currentLang);
+        if (isMounted) {
+          setTranslatedMap((prev) => {
+            const next = { ...prev };
+            validFaqs.forEach((faq, idx) => {
+              const currentEntry = next[faq.id] || { title: faq.title, content: faq.content };
+              next[faq.id] = {
+                title: translatedTitles[idx] || faq.title,
+                content: currentEntry.content,
+              };
+            });
+            return next;
+          });
+        }
+
+        // 3.3 Progressively translate FAQ HTML contents in chunks of 5
+        const chunkSize = 5;
+        for (let i = 0; i < validFaqs.length; i += chunkSize) {
+          if (!isMounted) break;
+          const chunk = validFaqs.slice(i, i + chunkSize);
+          const chunkResults = await Promise.all(
+            chunk.map(async (faq) => {
+              const transContent = await translateHtml(faq.content || '', currentLang, 'ko', documents);
+              return { id: faq.id, content: transContent };
+            })
+          );
+          if (isMounted) {
+            setTranslatedMap((prev) => {
+              const next = { ...prev };
+              chunkResults.forEach((r) => {
+                const existing = next[r.id];
+                next[r.id] = {
+                  title: existing?.title || validFaqs.find((f) => f.id === r.id)?.title || '',
+                  content: r.content,
+                };
+              });
+              return next;
+            });
+          }
+        }
+
+        if (isMounted) {
           setIsTranslating(false);
         }
       } catch (err) {
@@ -121,7 +192,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [currentLang, faqs, config.categories]);
+  }, [currentLang, faqs, documents, config.categories]);
 
   // Filter FAQs based on category & search query (Safe: preserves all valid posts)
   const filteredFaqs = (faqs || []).filter((faq) => {
@@ -152,6 +223,14 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     return dateB - dateA;
   });
 
+  // Track handled share jump target to strictly prevent re-render loop
+  const lastTargetHandledRef = useRef<string | null>(null);
+  const setSelectedCategoryRef = useRef(setSelectedCategory);
+  setSelectedCategoryRef.current = setSelectedCategory;
+
+  const onClearTargetRef = useRef(onClearTargetFaqId);
+  onClearTargetRef.current = onClearTargetFaqId;
+
   // Auto-jump, expand, and highlight targeted FAQ from share links
   useEffect(() => {
     let activeTargetId = targetFaqId;
@@ -165,18 +244,40 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     }
 
     if (!activeTargetId) return;
+    if (lastTargetHandledRef.current === activeTargetId) return;
 
-    const foundFaq = faqs.find((f) => f && f.id === activeTargetId);
+    const foundFaq = (faqs || []).find((f) => f && f.id === activeTargetId);
     if (!foundFaq) return;
+
+    lastTargetHandledRef.current = activeTargetId;
 
     // Ensure category doesn't filter out the shared post
     if (selectedCategory !== 'all' && !matchCategory(foundFaq.category, selectedCategory)) {
-      setSelectedCategory('all');
+      setSelectedCategoryRef.current('all');
     }
 
     // Expand and highlight immediately
     setExpandedId(foundFaq.id);
     setHighlightedId(foundFaq.id);
+
+    // If a clear callback exists, call it to avoid re-evaluating
+    if (onClearTargetRef.current) {
+      onClearTargetRef.current();
+    }
+
+    // Clean up query param so re-render/tab switch won't re-trigger
+    if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
+      try {
+        const u = new URL(window.location.href);
+        if (u.searchParams.has('faq') || u.searchParams.has('id')) {
+          u.searchParams.delete('faq');
+          u.searchParams.delete('id');
+          window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     // Scroll smoothly to target element
     const scrollToTarget = () => {
@@ -201,7 +302,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       clearTimeout(t3);
       clearTimeout(highlightTimer);
     };
-  }, [targetFaqId, faqs, selectedCategory, setSelectedCategory]);
+  }, [targetFaqId, faqs]);
 
   const toggleExpand = (uniqueId: string) => {
     setExpandedId((prev) => (prev === uniqueId ? null : uniqueId));
@@ -467,7 +568,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                       <div className="mt-4 p-2 bg-white rounded border border-gray-200 block sm:inline-block max-w-full">
                         <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                           <ImageIcon className="w-3.5 h-3.5 text-[#1A3B6B]" />
-                          <span>참조 안내 이미지 (클릭 시 원본 확대)</span>
+                          <span>{t.referenceImage || '참조 안내 이미지 (클릭 시 원본 확대)'}</span>
                         </p>
                         <img
                           src={faq.imageUrl}
@@ -478,12 +579,12 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                       </div>
                     )}
 
-                    {/* 6. 게시글 첨부파일 다운로드 (Requirement 6) */}
+                    {/* 6. 게시글 첨부파일 다운로드 (Requirement 6 - Auto-translated) */}
                     {faq.attachments && faq.attachments.length > 0 && (
                       <div className="mt-4 p-3 bg-white rounded-lg border border-emerald-200 shadow-2xs">
                         <div className="flex items-center gap-1.5 font-bold text-emerald-900 text-xs mb-2">
                           <Paperclip className="w-3.5 h-3.5 text-emerald-700" />
-                          <span>게시글 첨부파일 ({faq.attachments.length}개)</span>
+                          <span>{(t.attachedFiles || '게시글 첨부파일')} ({faq.attachments.length}{currentLang === 'ko' ? '개' : ''})</span>
                         </div>
                         <div className="space-y-1.5">
                           {faq.attachments.map((att) => {
@@ -512,7 +613,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                                   className="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs transition-colors"
                                 >
                                   <Download className="w-3.5 h-3.5" />
-                                  <span>다운로드</span>
+                                  <span>{t.download || '다운로드'}</span>
                                 </button>
                               </div>
                             );
@@ -521,7 +622,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                       </div>
                     )}
 
-                    {/* 7. 관련 행정 서식 자료실 연동 (Requirement 7: 게시글 관련 서식 자료 바로 다운받기) */}
+                    {/* 7. 관련 행정 서식 자료실 연동 (Requirement 7 - Auto-translated) */}
                     {faq.relatedDocumentIds && faq.relatedDocumentIds.length > 0 && (() => {
                       const linkedDocs = documents.filter((d) => faq.relatedDocumentIds?.includes(d.id));
                       if (linkedDocs.length === 0) return null;
@@ -530,7 +631,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                           <div className="flex items-center justify-between gap-2 mb-2.5">
                             <div className="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
                               <FolderDown className="w-4 h-4 text-indigo-700" />
-                              <span>관련 서식 및 자료실 바로가기 ({linkedDocs.length}개)</span>
+                              <span>{(t.relatedDocsAndDownloads || '관련 서식 및 자료실 바로가기')} ({linkedDocs.length}{currentLang === 'ko' ? '개' : ''})</span>
                             </div>
                             {onNavigateToDownloads && (
                               <button
@@ -538,7 +639,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                                 onClick={() => onNavigateToDownloads()}
                                 className="text-[11px] text-indigo-700 hover:text-indigo-900 font-semibold hover:underline flex items-center gap-0.5 cursor-pointer"
                               >
-                                <span>서식자료실 전체보기</span>
+                                <span>{t.viewAllDownloads || '서식자료실 전체보기'}</span>
                                 <ExternalLink className="w-3 h-3" />
                               </button>
                             )}
@@ -552,6 +653,12 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                               else if (doc.fileType === 'docx') typeBadgeBg = 'bg-blue-600';
                               else if (doc.fileType === 'xlsx') typeBadgeBg = 'bg-emerald-600';
 
+                              const isTranslatedMode = currentLang !== 'ko' && !showOriginal;
+                              const transDoc = isTranslatedMode ? transDocMap[doc.id] : null;
+                              const displayCategory = transDoc?.category || getTranslatedCategory(doc.category, currentLang, config.categories) || doc.category;
+                              const displayTitle = transDoc?.title || doc.title;
+                              const displayDesc = transDoc?.description || doc.description;
+
                               return (
                                 <div
                                   key={doc.id}
@@ -563,15 +670,15 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                                         {doc.fileType}
                                       </span>
                                       <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
-                                        {doc.category}
+                                        {displayCategory}
                                       </span>
-                                      <span className="text-[11px] text-gray-400">용량: {doc.fileSize}</span>
+                                      <span className="text-[11px] text-gray-400">{(t.fileCapacity || '용량')}: {doc.fileSize}</span>
                                     </div>
                                     <div className="font-bold text-gray-900 text-xs sm:text-sm">
-                                      📄 {doc.title}
+                                      📄 {displayTitle}
                                     </div>
-                                    {doc.description && (
-                                      <div className="text-[11.5px] text-gray-500 mt-0.5">{doc.description}</div>
+                                    {displayDesc && (
+                                      <div className="text-[11.5px] text-gray-500 mt-0.5">{displayDesc}</div>
                                     )}
                                   </div>
 
@@ -582,7 +689,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                                       className="px-3.5 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
                                     >
                                       <Download className="w-3.5 h-3.5" />
-                                      <span>즉시 다운로드</span>
+                                      <span>{t.downloadImmediate || '즉시 다운로드'}</span>
                                     </button>
                                     {onNavigateToDownloads && (
                                       <button
@@ -590,7 +697,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                                         onClick={() => onNavigateToDownloads(doc.category, doc.id)}
                                         className="px-2.5 py-1.5 rounded bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold text-xs cursor-pointer transition-colors"
                                       >
-                                        자료실에서 확인
+                                        {t.viewInDownloads || '자료실에서 확인'}
                                       </button>
                                     )}
                                   </div>
@@ -604,7 +711,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
                     {/* Action Bar: URL Copy & Web Share */}
                     <div className="mt-4 sm:mt-5 pt-3 border-t border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-gray-500">
-                      <span className="text-[11px] font-medium text-gray-500">최종 확인일: {new Date(faq.updatedAt).toLocaleDateString('ko-KR')}</span>
+                      <span className="text-[11px] font-medium text-gray-500">{(t.lastVerified || '최종 확인일')}: {new Date(faq.updatedAt).toLocaleDateString(currentLang === 'vi' ? 'vi-VN' : currentLang === 'en' ? 'en-US' : currentLang === 'zh' ? 'zh-CN' : currentLang === 'mn' ? 'mn-MN' : 'ko-KR')}</span>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
                         <button
