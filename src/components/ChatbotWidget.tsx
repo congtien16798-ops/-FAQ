@@ -153,12 +153,17 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
       translateTexts(rawSuggestions, chatLang, 'ko'),
     ]).then(([tName, tSub, tBadge, tWel, tPlace, tSugg]) => {
       if (isMounted) {
-        setTransName(tName);
-        setTransSubtitle(tSub);
-        setTransBadge(tBadge);
-        setTransWelcome(tWel);
-        setTransPlaceholder(tPlace);
-        setTransSuggestions(tSugg);
+        setTransName((prev) => (prev === tName ? prev : tName));
+        setTransSubtitle((prev) => (prev === tSub ? prev : tSub));
+        setTransBadge((prev) => (prev === tBadge ? prev : tBadge));
+        setTransWelcome((prev) => (prev === tWel ? prev : tWel));
+        setTransPlaceholder((prev) => (prev === tPlace ? prev : tPlace));
+        setTransSuggestions((prev) => {
+          if (prev.length === tSugg.length && prev.every((v, i) => v === tSugg[i])) {
+            return prev;
+          }
+          return tSugg;
+        });
       }
     });
 
@@ -172,7 +177,7 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
     config.chatbotBadgeText,
     config.chatbotWelcomeMsg,
     config.chatbotPlaceholder,
-    config.chatbotSuggestions,
+    (config.chatbotSuggestions || []).join('|||'),
   ]);
 
   // Messages state
@@ -191,14 +196,16 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   // Update welcome message if language or transWelcome changes
   useEffect(() => {
     if (messages.length === 1 && messages[0].id === 'welcome-1') {
-      setMessages([
-        {
-          id: 'welcome-1',
-          role: 'assistant',
-          content: transWelcome,
-          timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      if (messages[0].content !== transWelcome) {
+        setMessages([
+          {
+            id: 'welcome-1',
+            role: 'assistant',
+            content: transWelcome,
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      }
     }
   }, [transWelcome]);
 

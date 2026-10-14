@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useRef } from 'react';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../firebase';
 import { initialSiteConfig } from '../constants/initialData';
@@ -119,6 +119,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     root.style.setProperty('--line-height-scale', lhMap[cfg.fontLineHeight || 'normal'] || '1.6');
   };
 
+  const isDesignModeRef = useRef(isDesignMode);
+  isDesignModeRef.current = isDesignMode;
+
   // On mount: listen to real-time site_config changes
   useEffect(() => {
     const docRef = doc(db, 'site_config', 'main');
@@ -127,36 +130,24 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const remoteData = snap.data() as Partial<SiteConfig>;
         const merged: SiteConfig = { ...initialSiteConfig, ...remoteData };
         setConfig(merged);
-        setDraftConfig((prev) => (isDesignMode ? prev : merged));
+        setDraftConfig((prev) => (isDesignModeRef.current ? prev : merged));
         try {
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
         } catch {
           // ignore
         }
-        applyCssVariables(merged);
-      } else {
-        applyCssVariables(config);
+        applyCssVariables(isDesignModeRef.current ? draftConfig : merged);
       }
     }, (err) => {
       console.warn('Real-time site_config listener warning, using local cache:', err);
-      applyCssVariables(config);
     });
 
     return () => unsub();
-  }, [isDesignMode]);
+  }, []);
 
-  // When live config updates, re-apply CSS variables
+  // When active configuration or design mode changes, apply CSS variables
   useEffect(() => {
-    applyCssVariables(config);
-  }, [config]);
-
-  // When in design mode, dynamically preview draft variables
-  useEffect(() => {
-    if (isDesignMode) {
-      applyCssVariables(draftConfig);
-    } else {
-      applyCssVariables(config);
-    }
+    applyCssVariables(isDesignMode ? draftConfig : config);
   }, [isDesignMode, draftConfig, config]);
 
   const updateDraft = (updates: Partial<SiteConfig>) => {

@@ -109,6 +109,10 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
   const [transScheduleMap, setTransScheduleMap] = useState<Record<string, { title: string; description: string; location: string }>>({});
   const [catTranslations, setCatTranslations] = useState<Record<string, string>>({});
 
+  const categoriesSig = (config.categories || [])
+    .map((c) => `${c.id}:${c.name?.ko || ''}:${c.name?.[effectiveDisplayLang] || ''}`)
+    .join('|');
+
   useEffect(() => {
     if (effectiveDisplayLang === 'ko') {
       setTransFaqMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
@@ -224,7 +228,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
     return () => {
       isMounted = false;
     };
-  }, [effectiveDisplayLang, faqs, documents, schedules, config.categories]);
+  }, [effectiveDisplayLang, faqs, documents, schedules, categoriesSig]);
 
   // Normalize query tokens
   const q = (searchQuery || '').trim().toLowerCase();

@@ -1284,7 +1284,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
 
               {/* Rich WYSIWYG Editor */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
                   <label className="font-semibold text-gray-700 flex items-center gap-1.5">
                     <span>답변 본문 내용</span>
                     <span className="text-red-500">*</span>
@@ -1292,12 +1292,16 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                       (서식 편집, 8~20px 글자 크기, 글꼴 및 글자색 다양화, 안내 박스, 줄 높이, 파일/서식 연동)
                     </span>
                   </label>
+                  <div className="flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">
+                    <span>↕ 본문 스크롤바(Scrollbar) 지원</span>
+                  </div>
                 </div>
                 <RichTextEditor
                   value={content}
                   onChange={setContent}
                   placeholder="답변 내용을 자유롭게 작성하세요..."
-                  minHeight="300px"
+                  minHeight="280px"
+                  maxHeight="450px"
                   documents={documents}
                 />
               </div>

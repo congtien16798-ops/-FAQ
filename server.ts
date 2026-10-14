@@ -68,11 +68,71 @@ function serverRefineVietnamese(text: string): string {
   return res;
 }
 
+/**
+ * Preserves text inside single quotes ('...' or ‘...’) in the original Korean text.
+ * Buttons, checkboxes, menu items like '전체동의', '가입하기' remain in Korean.
+ * Example: "'전체동의' 체크 → '가입하기' 클릭" -> "Check '전체동의' → Click '가입하기'"
+ */
+function restoreOriginalSingleQuotes(originalText: string, translatedText: string): string {
+  if (!originalText || !translatedText || originalText === translatedText) return translatedText;
+
+  const origMatches: string[] = [];
+  const singleQuoteRegex = /['‘`’\u2018\u2019]([^'’`\u2018\u2019\r\n]+)[''’`\u2018\u2019]/g;
+  let m: RegExpExecArray | null;
+  while ((m = singleQuoteRegex.exec(originalText)) !== null) {
+    origMatches.push(m[1].trim());
+  }
+  if (origMatches.length === 0) return translatedText;
+
+  // Find quoted segments in translatedText (may be single, double, or smart quotes)
+  const transMatches: { full: string; inner: string; index: number }[] = [];
+  const transRegex = /['‘`’"“”\u2018\u2019\u201C\u201D]([^'’`"“”\u2018\u2019\u201C\u201D\r\n]+)[''’`"“”\u2018\u2019\u201C\u201D]/g;
+  let tm: RegExpExecArray | null;
+  while ((tm = transRegex.exec(translatedText)) !== null) {
+    transMatches.push({ full: tm[0], inner: tm[1].trim(), index: tm.index });
+  }
+
+  // If number of quotes matches, substitute each in position
+  if (transMatches.length === origMatches.length) {
+    let replaced = translatedText;
+    for (let i = transMatches.length - 1; i >= 0; i--) {
+      const match = transMatches[i];
+      const origWord = origMatches[i];
+      replaced =
+        replaced.slice(0, match.index) +
+        `'${origWord}'` +
+        replaced.slice(match.index + match.full.length);
+    }
+    return replaced;
+  }
+
+  // If quote count differs, ensure each original quote term is restored
+  let result = translatedText;
+  origMatches.forEach((origWord) => {
+    if (!result.includes(`'${origWord}'`) && !result.includes(`‘${origWord}’`)) {
+      if (result.includes(origWord)) {
+        result = result.split(origWord).join(`'${origWord}'`);
+      }
+    }
+  });
+
+  return result;
+}
+
 const fetchServerGtxFallback = async (inputStr: string, sl: string, tl: string, targetLang: string): Promise<string> => {
   try {
     const trimmed = inputStr.trim();
     if (!trimmed) return inputStr;
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(trimmed)}`;
+
+    // Mask single quotes before sending to GTX
+    const quotes: string[] = [];
+    const masked = trimmed.replace(/['‘`’\u2018\u2019]([^'’`\u2018\u2019\r\n]+)[''’`\u2018\u2019]/g, (_match, inner) => {
+      const idx = quotes.length;
+      quotes.push(inner.trim());
+      return `__KMUQ_${idx}__`;
+    });
+
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(masked)}`;
     const gtxRes = await fetch(gtxUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -82,8 +142,12 @@ const fetchServerGtxFallback = async (inputStr: string, sl: string, tl: string, 
     if (gtxRes.ok) {
       const gtxData = await gtxRes.json();
       if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
-        const parts = gtxData[0].map((item: any[]) => item[0]).join('');
+        let parts = gtxData[0].map((item: any[]) => item[0]).join('');
         if (parts) {
+          quotes.forEach((q, idx) => {
+            parts = parts.replace(new RegExp(`__\\s*KMUQ_${idx}\\s*__`, 'gi'), `'${q}'`);
+          });
+          parts = restoreOriginalSingleQuotes(trimmed, parts);
           return targetLang === 'vi' ? serverRefineVietnamese(parts) : parts;
         }
       }
@@ -128,7 +192,7 @@ app.post('/api/translate', async (req, res) => {
         const cachedVal = serverTranslationCache.get(cacheKey);
         // Only use cache if it was actually translated
         if (cachedVal && cachedVal.trim() !== itemText.trim()) {
-          results[idx] = cachedVal;
+          results[idx] = restoreOriginalSingleQuotes(itemText, cachedVal);
         } else {
           uncachedIndices.push(idx);
           uncachedTexts.push(itemText.trim());
@@ -152,6 +216,12 @@ app.post('/api/translate', async (req, res) => {
             const targetLangLabel = targetLangNames[targetLang] || targetLang;
             const prompt = `You are an expert official translator specializing in Keimyung University (계명대학교) Korean Language Institute (한국어학당) and Korean immigration/university administration.
 Translate each item in this JSON array from Korean to natural, accurate, high-quality ${targetLangLabel}.
+
+[CRITICAL RULE FOR SINGLE-QUOTED TEXT]:
+Any words, button names, menu titles, checkboxes, or phrases enclosed in single quotes '...' or ‘...’ (e.g. '전체동의', '가입하기', ‘수강신청’, ‘신청완료’, ‘제출’) MUST NOT be translated under any circumstances!
+Keep the exact original Korean text inside the single quotes, with the single quotes intact.
+Example: "'전체동의' 체크 → '가입하기' 클릭" -> "Check '전체동의' → Click '가입하기'" (in English) / "Tích chọn '전체동의' → Nhấp vào '가입하기'" (in Vietnamese) / "勾选 '전체동의' → 点击 '가입하기'" (in Chinese) / "'전체동의' чагтлах → '가입하기' дарах" (in Mongolian).
+Foreign students need the exact Korean text in single quotes to locate matching buttons, checkboxes, and menu items on university screens.
 
 [TERMINOLOGY & GLOSSARY RULES]:
 1. "한국어학당" -> "Viện Ngôn ngữ tiếng Hàn (ĐH Keimyung)" / "Korean Language Institute" / "韩国语学堂" / "Солонгос хэлний сургууль"
@@ -184,8 +254,9 @@ ${JSON.stringify(uncachedTexts)}`;
             const cleanJson = rawTxt.replace(/^```json/i, '').replace(/^```/i, '').replace(/```$/i, '').trim();
             const parsed = JSON.parse(cleanJson);
             if (Array.isArray(parsed) && parsed.length === uncachedTexts.length) {
-              batchTranslated = parsed.map((item: string) => {
+              batchTranslated = parsed.map((item: string, idx: number) => {
                 let s = String(item || '').trim();
+                s = restoreOriginalSingleQuotes(uncachedTexts[idx], s);
                 if (targetLang === 'vi') s = serverRefineVietnamese(s);
                 return s;
               });
@@ -203,14 +274,14 @@ ${JSON.stringify(uncachedTexts)}`;
           batchTranslated = await Promise.all(
             uncachedTexts.map(async (t) => {
               const trans = await fetchServerGtxFallback(t, sl, tl, targetLang);
-              return trans;
+              return restoreOriginalSingleQuotes(t, trans);
             })
           );
         }
 
         batchTranslated.forEach((trans, i) => {
           const originalText = uncachedTexts[i];
-          const finalTrans = trans || originalText;
+          const finalTrans = restoreOriginalSingleQuotes(originalText, trans || originalText);
           const cacheKey = `${sourceLang}->${targetLang}:${originalText}`;
           // Only cache if translated successfully
           if (finalTrans.trim() !== originalText.trim()) {
@@ -236,7 +307,8 @@ ${JSON.stringify(uncachedTexts)}`;
     const cacheKey = `${sourceLang}->${targetLang}:${trimmed}`;
 
     if (serverTranslationCache.has(cacheKey)) {
-      return res.json({ translated: serverTranslationCache.get(cacheKey) });
+      const cached = serverTranslationCache.get(cacheKey)!;
+      return res.json({ translated: restoreOriginalSingleQuotes(trimmed, cached) });
     }
 
     // Check Gemini API first if not rate limited
@@ -254,6 +326,12 @@ ${JSON.stringify(uncachedTexts)}`;
       const translationPrompt = `
 You are an expert official translator specializing in Keimyung University (계명대학교) Korean Language Institute (한국어학당) and Korean immigration/university administration.
 Translate the following source text (${sourceLang === 'ko' ? 'Korean' : sourceLang}) into natural, highly accurate, professional ${targetLangLabel}.
+
+[CRITICAL RULE FOR SINGLE-QUOTED TEXT]:
+Any words, button names, menu titles, checkboxes, or phrases enclosed in single quotes '...' or ‘...’ (e.g. '전체동의', '가입하기', ‘수강신청’, ‘신청완료’, ‘제출’) MUST NOT be translated under any circumstances!
+Keep the exact original Korean text inside the single quotes, with the single quotes intact.
+Example: "'전체동의' 체크 → '가입하기' 클릭" -> "Check '전체동의' → Click '가입하기'" (in English) / "Tích chọn '전체동의' → Nhấp vào '가입하기'" (in Vietnamese) / "勾选 '전체동의' → 点击 '가입하기'" (in Chinese) / "'전체동의' чагтлах → '가입하기' дарах" (in Mongolian).
+Foreign students need the exact Korean text in single quotes to locate matching buttons, checkboxes, and menu items on university screens.
 
 [CRITICAL TRANSLATION RULES]:
 1. Use standard university & administrative terms:
@@ -289,6 +367,7 @@ ${trimmed}
         });
         let translated = response.text?.trim() || '';
         if (translated) {
+          translated = restoreOriginalSingleQuotes(trimmed, translated);
           if (targetLang === 'vi') {
             translated = serverRefineVietnamese(translated);
           }
@@ -305,7 +384,8 @@ ${trimmed}
     }
 
     // High reliability GTX fallback executed on server
-    const fallbackText = await fetchServerGtxFallback(trimmed, sl, tl, targetLang);
+    let fallbackText = await fetchServerGtxFallback(trimmed, sl, tl, targetLang);
+    fallbackText = restoreOriginalSingleQuotes(trimmed, fallbackText);
     if (fallbackText && fallbackText.trim() !== trimmed) {
       serverTranslationCache.set(cacheKey, fallbackText);
     }

@@ -48,6 +48,10 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
+  const categoriesSig = (config.categories || [])
+    .map((c) => `${c.id}:${c.name?.ko || ''}:${c.name?.[currentLang] || ''}`)
+    .join('|');
+
   useEffect(() => {
     if (currentLang === 'ko') {
       setTranslatedMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
@@ -192,7 +196,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [currentLang, faqs, documents, config.categories]);
+  }, [currentLang, faqs, documents, categoriesSig]);
 
   // Filter FAQs based on category & search query (Safe: preserves all valid posts)
   const filteredFaqs = (faqs || []).filter((faq) => {
@@ -260,23 +264,31 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
     setExpandedId(foundFaq.id);
     setHighlightedId(foundFaq.id);
 
-    // If a clear callback exists, call it to avoid re-evaluating
-    if (onClearTargetRef.current) {
-      onClearTargetRef.current();
-    }
-
-    // Clean up query param so re-render/tab switch won't re-trigger
+    // Clean up query param and hash so re-render/tab switch won't re-trigger
     if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
       try {
         const u = new URL(window.location.href);
+        let changed = false;
         if (u.searchParams.has('faq') || u.searchParams.has('id')) {
           u.searchParams.delete('faq');
           u.searchParams.delete('id');
-          window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+          changed = true;
+        }
+        if (u.hash && u.hash.startsWith('#faq-')) {
+          u.hash = '';
+          changed = true;
+        }
+        if (changed) {
+          window.history.replaceState(null, '', u.pathname + u.search + (u.hash || ''));
         }
       } catch {
         // ignore
       }
+    }
+
+    // If a clear callback exists, call it to avoid re-evaluating
+    if (onClearTargetRef.current) {
+      onClearTargetRef.current();
     }
 
     // Scroll smoothly to target element

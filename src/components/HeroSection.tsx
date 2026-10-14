@@ -41,6 +41,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   const [transPlaceholder, setTransPlaceholder] = useState('');
   const [transBtnText, setTransBtnText] = useState('');
 
+  const categoriesSig = (config.categories || [])
+    .map((c) => `${c.id}:${c.name?.ko || ''}:${c.name?.[currentLang] || ''}`)
+    .join('|');
+
   useEffect(() => {
     if (currentLang === 'ko') {
       setCatLabels((prev) => (Object.keys(prev).length === 0 ? prev : {}));
@@ -81,10 +85,17 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           catResults.forEach((c) => {
             map[c.id] = c.label;
           });
-          setCatLabels(map);
-          if (th) setTransHeroTitle(th);
-          if (tp) setTransPlaceholder(tp);
-          if (tb) setTransBtnText(tb);
+          setCatLabels((prev) => {
+            const prevKeys = Object.keys(prev);
+            const nextKeys = Object.keys(map);
+            if (prevKeys.length === nextKeys.length && prevKeys.every((k) => prev[k] === map[k])) {
+              return prev;
+            }
+            return map;
+          });
+          if (th) setTransHeroTitle((prev) => (prev === th ? prev : th));
+          if (tp) setTransPlaceholder((prev) => (prev === tp ? prev : tp));
+          if (tb) setTransBtnText((prev) => (prev === tb ? prev : tb));
         }
       } catch (err) {
         console.warn('Hero translation error:', err);
@@ -96,7 +107,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [currentLang, config.categories, config.heroTitle, config.searchPlaceholder, config.searchButtonText]);
+  }, [currentLang, categoriesSig, config.heroTitle, config.searchPlaceholder, config.searchButtonText]);
 
   // Dynamic categories from config with fallback
   const categories: { id: string; label: string; icon: React.ReactNode }[] = [

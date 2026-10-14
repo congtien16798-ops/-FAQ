@@ -47,6 +47,7 @@ interface RichTextEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   minHeight?: string;
+  maxHeight?: string;
   documents?: DocumentItem[];
 }
 
@@ -146,6 +147,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   onChange,
   placeholder = '답변 본문 내용을 입력하고 서식을 자유롭게 꾸며보세요...',
   minHeight = '300px',
+  maxHeight = '450px',
   documents: propDocuments,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -154,6 +156,27 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const [isCodeView, setIsCodeView] = useState(false);
   const [codeValue, setCodeValue] = useState(value);
+  const [workspaceHeight, setWorkspaceHeight] = useState<string>(maxHeight || '450px');
+  const [canScroll, setCanScroll] = useState(false);
+
+  useEffect(() => {
+    if (maxHeight) {
+      setWorkspaceHeight(maxHeight);
+    }
+  }, [maxHeight]);
+
+  const checkScrollable = useCallback(() => {
+    if (editorRef.current) {
+      const { scrollHeight, clientHeight } = editorRef.current;
+      setCanScroll(scrollHeight > clientHeight + 4);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScrollable();
+    const timer = setTimeout(checkScrollable, 200);
+    return () => clearTimeout(timer);
+  }, [value, workspaceHeight, checkScrollable]);
 
   // 1. Font Family & Size State (Requirement 1 & 2)
   const [currentFontFamily, setCurrentFontFamily] = useState(FONT_FAMILY_OPTIONS[0].value);
@@ -930,7 +953,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       />
 
       {/* Main Formatting Toolbar */}
-      <div className="bg-gray-50 border-b border-gray-200 p-1.5 flex flex-wrap items-center gap-1 text-xs select-none">
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 p-1.5 flex flex-wrap items-center gap-1 text-xs select-none shadow-2xs">
         {/* Undo / Redo */}
         <div className="flex items-center border-r border-gray-200 pr-1 mr-0.5">
           <button
@@ -1515,8 +1538,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </div>
       )}
 
-      {/* Editor Content Area */}
-      <div className="relative">
+      {/* Editor Content Area with Dedicated Vertical Scrollbar */}
+      <div className="relative group/editor">
         {isCodeView ? (
           <textarea
             value={codeValue}
@@ -1525,38 +1548,136 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               onChange(e.target.value);
             }}
             rows={14}
-            className="w-full p-4 font-mono text-xs text-green-400 bg-gray-900 leading-relaxed focus:outline-none resize-y"
+            className="w-full p-4 font-mono text-xs text-green-400 bg-gray-900 leading-relaxed focus:outline-none resize-y editor-workspace-scroll"
             placeholder="HTML 소스 코드를 직접 편집할 수 있습니다..."
-            style={{ minHeight }}
+            style={{
+              minHeight,
+              maxHeight: workspaceHeight === 'none' ? undefined : workspaceHeight,
+              overflowY: workspaceHeight === 'none' ? 'visible' : 'auto',
+            }}
           />
         ) : (
           <div
             ref={editorRef}
             contentEditable
-            onInput={handleEditorInput}
+            onInput={() => {
+              handleEditorInput();
+              checkScrollable();
+            }}
+            onScroll={checkScrollable}
             onClick={handleEditorClick}
             onKeyDown={handleEditorKeyDown}
-            className="p-4 text-xs text-gray-800 leading-relaxed focus:outline-none overflow-y-auto prose prose-sm max-w-none [&_img]:transition-all [&_img:hover]:ring-2 [&_img:hover]:ring-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_td]:border [&_td]:border-gray-300 [&_td]:p-2"
-            style={{ minHeight }}
+            className="p-4 text-xs text-gray-800 leading-relaxed focus:outline-none editor-workspace-scroll prose prose-sm max-w-none [&_img]:transition-all [&_img:hover]:ring-2 [&_img:hover]:ring-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_td]:border [&_td]:border-gray-300 [&_td]:p-2"
+            style={{
+              minHeight,
+              maxHeight: workspaceHeight === 'none' ? undefined : workspaceHeight,
+              overflowY: workspaceHeight === 'none' ? 'visible' : 'auto',
+            }}
             data-placeholder={placeholder}
           />
         )}
+
+        {/* Quick Scrollbar Jump Buttons (Displayed when content is long) */}
+        {!isCodeView && canScroll && (
+          <div className="absolute right-3.5 bottom-3.5 flex flex-col gap-1 z-10 opacity-75 hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={() => {
+                editorRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="p-1.5 bg-white/95 text-gray-700 hover:text-[#1A3B6B] hover:bg-white rounded-md shadow-md border border-gray-300 cursor-pointer text-[10px] flex items-center justify-center transition-transform hover:scale-105"
+              title="본문 맨 위로 스크롤 (Top)"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (editorRef.current) {
+                  editorRef.current.scrollTo({ top: editorRef.current.scrollHeight, behavior: 'smooth' });
+                }
+              }}
+              className="p-1.5 bg-white/95 text-gray-700 hover:text-[#1A3B6B] hover:bg-white rounded-md shadow-md border border-gray-300 cursor-pointer text-[10px] flex items-center justify-center transition-transform hover:scale-105"
+              title="본문 맨 아래로 스크롤 (Bottom)"
+            >
+              ▼
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Editor Footer Status & Shortcut Bar */}
-      <div className="bg-gray-50 border-t border-gray-200 px-3 py-1.5 flex flex-wrap items-center justify-between text-[11px] text-gray-500">
-        <div className="flex items-center gap-3">
+      {/* Editor Footer Status & Shortcut & Height Bar */}
+      <div className="bg-gray-50 border-t border-gray-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <span className="flex items-center gap-1 text-gray-600">
             <span>💡 팁:</span>
             <kbd className="px-1 py-0.2 bg-gray-200 rounded text-[10px]">Ctrl+B</kbd> 굵게,
             <kbd className="px-1 py-0.2 bg-gray-200 rounded text-[10px] ml-1">Ctrl+I</kbd> 기울임,
             <kbd className="px-1 py-0.2 bg-gray-200 rounded text-[10px] ml-1">Tab</kbd> 들여쓰기
           </span>
-          <span className="hidden sm:inline text-gray-400">• 박스나 이미지를 클릭하여 실시간 수정할 수 있습니다.</span>
+          <span className="hidden sm:inline text-gray-400">• 긴 내용은 우측 세로 스크롤바로 위아래 이동 가능</span>
         </div>
-        <span className="text-[10px] text-gray-400">
-          현재 서식: {currentFontSize}px / 행간 {currentLineHeight}
-        </span>
+
+        {/* Scrollbar & Workspace Height Controls */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 ml-auto">
+          <div className="flex items-center gap-1 bg-white border border-gray-300 rounded px-1.5 py-0.5">
+            <span className="text-[10px] text-gray-500 font-semibold flex items-center gap-0.5">
+              <span>↕ 작업 공간:</span>
+            </span>
+            {[
+              { label: '350px', val: '350px' },
+              { label: '450px (기본)', val: '450px' },
+              { label: '650px (넓게)', val: '650px' },
+              { label: '전체 펼침', val: 'none' },
+            ].map((preset) => (
+              <button
+                key={preset.val}
+                type="button"
+                onClick={() => setWorkspaceHeight(preset.val)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                  workspaceHeight === preset.val
+                    ? 'bg-[#1A3B6B] text-white font-bold'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title={`본문 작업 공간 높이를 ${preset.label}로 설정`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          {canScroll && (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-medium hidden md:inline">
+                스크롤바 활성
+              </span>
+              <button
+                type="button"
+                onClick={() => editorRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="px-1.5 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded text-[10px] text-gray-700 cursor-pointer"
+                title="본문 맨 위로 스크롤"
+              >
+                ↑ 위로
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editorRef.current) {
+                    editorRef.current.scrollTo({ top: editorRef.current.scrollHeight, behavior: 'smooth' });
+                  }
+                }}
+                className="px-1.5 py-0.5 bg-white hover:bg-gray-100 border border-gray-300 rounded text-[10px] text-gray-700 cursor-pointer"
+                title="본문 맨 아래로 스크롤"
+              >
+                ↓ 아래로
+              </button>
+            </div>
+          )}
+
+          <span className="text-[10px] text-gray-400">
+            서식: {currentFontSize}px / 행간 {currentLineHeight}
+          </span>
+        </div>
       </div>
 
       {/* ===================== MODAL 4: BOX CUSTOMIZER MODAL (Requirement 4) ===================== */}

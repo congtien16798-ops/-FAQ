@@ -34,6 +34,10 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
+  const categoriesSig = (config.categories || [])
+    .map((c) => `${c.id}:${c.name?.ko || ''}:${c.name?.[currentLang] || ''}`)
+    .join('|');
+
   useEffect(() => {
     if (currentLang === 'ko') {
       setTransDocMap((prev) => (Object.keys(prev).length === 0 ? prev : {}));
@@ -133,7 +137,7 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [currentLang, documents, config.categories]);
+  }, [currentLang, documents, categoriesSig]);
 
   // Extract unique categories (excluding 'all' from set to avoid duplicate with initial 'all')
   const categories = [

@@ -28,7 +28,59 @@ const persistCache = () => {
 };
 
 /**
+ * Preserves text inside single quotes ('...' or ‘...’) in the original Korean text.
+ * Buttons, checkboxes, menu items like '전체동의', '가입하기' remain in Korean.
+ * Example: "'전체동의' 체크 → '가입하기' 클릭" -> "Check '전체동의' → Click '가입하기'"
+ */
+export function restoreOriginalSingleQuotes(originalText: string, translatedText: string): string {
+  if (!originalText || !translatedText || originalText === translatedText) return translatedText;
+
+  const origMatches: string[] = [];
+  const singleQuoteRegex = /['‘`’\u2018\u2019]([^'’`\u2018\u2019\r\n]+)[''’`\u2018\u2019]/g;
+  let m: RegExpExecArray | null;
+  while ((m = singleQuoteRegex.exec(originalText)) !== null) {
+    origMatches.push(m[1].trim());
+  }
+  if (origMatches.length === 0) return translatedText;
+
+  // Find quoted segments in translatedText (may be single, double, or smart quotes)
+  const transMatches: { full: string; inner: string; index: number }[] = [];
+  const transRegex = /['‘`’"“”\u2018\u2019\u201C\u201D]([^'’`"“”\u2018\u2019\u201C\u201D\r\n]+)[''’`"“”\u2018\u2019\u201C\u201D]/g;
+  let tm: RegExpExecArray | null;
+  while ((tm = transRegex.exec(translatedText)) !== null) {
+    transMatches.push({ full: tm[0], inner: tm[1].trim(), index: tm.index });
+  }
+
+  // If number of quotes matches, substitute each in position
+  if (transMatches.length === origMatches.length) {
+    let replaced = translatedText;
+    for (let i = transMatches.length - 1; i >= 0; i--) {
+      const match = transMatches[i];
+      const origWord = origMatches[i];
+      replaced =
+        replaced.slice(0, match.index) +
+        `'${origWord}'` +
+        replaced.slice(match.index + match.full.length);
+    }
+    return replaced;
+  }
+
+  // If quote count differs, ensure each original quote term is restored
+  let result = translatedText;
+  origMatches.forEach((origWord) => {
+    if (!result.includes(`'${origWord}'`) && !result.includes(`‘${origWord}’`)) {
+      if (result.includes(origWord)) {
+        result = result.split(origWord).join(`'${origWord}'`);
+      }
+    }
+  });
+
+  return result;
+}
+
+/**
  * Returns cached translation immediately if present in memory, null otherwise.
+ * Automatically restores original single-quoted Korean words.
  */
 export function getCachedTranslation(
   text: string,
@@ -37,7 +89,9 @@ export function getCachedTranslation(
 ): string | null {
   if (!text || !text.trim() || targetLang === sourceLang) return text;
   const cacheKey = `${sourceLang}->${targetLang}:${text.trim()}`;
-  return memoryCache[cacheKey] || null;
+  const cached = memoryCache[cacheKey];
+  if (!cached) return null;
+  return restoreOriginalSingleQuotes(text, cached);
 }
 
 // Language code mapping for Google Translate API
@@ -214,7 +268,8 @@ export async function translateText(
       if (apiRes.ok) {
         const data = await apiRes.json();
         if (data && data.translated) {
-          const finalResult = targetLang === 'vi' ? refineVietnameseTranslation(data.translated) : data.translated;
+          let finalResult = restoreOriginalSingleQuotes(trimmed, data.translated);
+          if (targetLang === 'vi') finalResult = refineVietnameseTranslation(finalResult);
           memoryCache[cacheKey] = finalResult;
           persistCache();
           return finalResult;
@@ -226,14 +281,26 @@ export async function translateText(
 
     // 2. High-speed client-side fallback via Google Translate public endpoint
     try {
-      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(trimmed)}`;
+      // Mask single quotes before sending to client Google Translate endpoint
+      const quotes: string[] = [];
+      const masked = trimmed.replace(/['‘`’\u2018\u2019]([^'’`\u2018\u2019\r\n]+)[''’`\u2018\u2019]/g, (_match, inner) => {
+        const idx = quotes.length;
+        quotes.push(inner.trim());
+        return `__KMUQ_${idx}__`;
+      });
+
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sl)}&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(masked)}`;
       const gtxRes = await fetch(gtxUrl);
       if (gtxRes.ok) {
         const gtxData = await gtxRes.json();
         if (Array.isArray(gtxData) && Array.isArray(gtxData[0])) {
-          const joined = gtxData[0].map((item: any[]) => item[0]).join('');
+          let joined = gtxData[0].map((item: any[]) => item[0]).join('');
           if (joined) {
-            const finalResult = targetLang === 'vi' ? refineVietnameseTranslation(joined) : joined;
+            quotes.forEach((q, idx) => {
+              joined = joined.replace(new RegExp(`__\\s*KMUQ_${idx}\\s*__`, 'gi'), `'${q}'`);
+            });
+            let finalResult = restoreOriginalSingleQuotes(trimmed, joined);
+            if (targetLang === 'vi') finalResult = refineVietnameseTranslation(finalResult);
             memoryCache[cacheKey] = finalResult;
             persistCache();
             return finalResult;
@@ -275,7 +342,7 @@ export async function translateTexts(
     const trimmed = txt.trim();
     const cacheKey = `${sourceLang}->${targetLang}:${trimmed}`;
     if (memoryCache[cacheKey]) {
-      results[idx] = memoryCache[cacheKey];
+      results[idx] = restoreOriginalSingleQuotes(trimmed, memoryCache[cacheKey]);
     } else {
       uncachedMap.push({ index: idx, text: trimmed });
     }
@@ -312,7 +379,9 @@ export async function translateTexts(
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.translations) && data.translations.length === chunk.length) {
-          chunkTranslations = data.translations;
+          chunkTranslations = data.translations.map((t: string, idx: number) =>
+            restoreOriginalSingleQuotes(chunk[idx], t)
+          );
         }
       }
     } catch {
@@ -329,6 +398,7 @@ export async function translateTexts(
     // Save into memory cache
     chunk.forEach((txt, cIdx) => {
       let finalStr = chunkTranslations![cIdx] || txt;
+      finalStr = restoreOriginalSingleQuotes(txt, finalStr);
       if (targetLang === 'vi') finalStr = refineVietnameseTranslation(finalStr);
       const cKey = `${sourceLang}->${targetLang}:${txt}`;
       memoryCache[cKey] = finalStr;
@@ -340,12 +410,16 @@ export async function translateTexts(
   // Populate results for all uncached instances
   uncachedMap.forEach((item) => {
     const cKey = `${sourceLang}->${targetLang}:${item.text}`;
-    results[item.index] = memoryCache[cKey] || item.text;
+    results[item.index] = restoreOriginalSingleQuotes(item.text, memoryCache[cKey] || item.text);
   });
 
   // Ensure all indices are filled
   texts.forEach((txt, idx) => {
-    if (results[idx] === undefined) results[idx] = txt;
+    if (results[idx] === undefined) {
+      results[idx] = txt;
+    } else {
+      results[idx] = restoreOriginalSingleQuotes(txt, results[idx]);
+    }
   });
 
   return results;

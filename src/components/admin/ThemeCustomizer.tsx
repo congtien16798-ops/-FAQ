@@ -2475,6 +2475,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       selectedCategory={previewSelectedCategory as any}
                       setSelectedCategory={handleSetPreviewCategory}
                       searchQuery=""
+                      targetFaqId={null}
                     />
                   )}
 
@@ -2717,6 +2718,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({
                       selectedCategory={previewSelectedCategory as any}
                       setSelectedCategory={handleSetPreviewCategory}
                       searchQuery=""
+                      targetFaqId={null}
                     />
                   )}
                   {previewTab === 'downloads' && (
