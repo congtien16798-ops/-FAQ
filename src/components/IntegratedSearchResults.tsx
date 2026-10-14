@@ -18,7 +18,9 @@ import {
   Globe,
   Calendar,
   Languages,
-  RotateCcw
+  RotateCcw,
+  FileDown,
+  Loader2,
 } from 'lucide-react';
 import { FaqItem, DocumentItem, ScheduleEvent, Language } from '../types';
 import { translations } from '../constants/translations';
@@ -38,6 +40,7 @@ import {
 } from '../services/translator';
 import { triggerDocumentDownload } from '../services/downloadHelper';
 import { getFaqShareUrl } from '../services/shareHelper';
+import { downloadFaqAsPdf } from '../services/pdfExporter';
 
 interface IntegratedSearchResultsProps {
   faqs: FaqItem[];
@@ -69,6 +72,7 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(null);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [downloadToast, setDownloadToast] = useState<string | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
   // 1. Language Detection & Search Keyword Mapping State for backend matching
   const [detection, setDetection] = useState<SearchQueryDetection>(() => {
@@ -403,6 +407,39 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
     }
   };
 
+  const handleDownloadPdf = async (faq: FaqItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (downloadingPdfId) return;
+
+    const trans = transFaqMap[faq.id];
+    const titleToRender = trans?.title || faq.title;
+    const contentToRender = trans?.content || faq.content;
+    const catItem = config.categories?.find((c) => c.id === faq.category);
+    const categoryName = catItem?.name?.[effectiveDisplayLang] || catItem?.name?.ko || faq.category;
+
+    setDownloadingPdfId(faq.id);
+    try {
+      const success = await downloadFaqAsPdf({
+        title: titleToRender,
+        categoryName,
+        contentHtml: contentToRender,
+        dateStr: new Date(faq.updatedAt || faq.createdAt).toLocaleDateString(
+          effectiveDisplayLang === 'vi' ? 'vi-VN' : effectiveDisplayLang === 'en' ? 'en-US' : effectiveDisplayLang === 'zh' ? 'zh-CN' : effectiveDisplayLang === 'mn' ? 'mn-MN' : 'ko-KR'
+        ),
+        faqId: faq.id,
+        lang: effectiveDisplayLang,
+      });
+      if (success) {
+        setCopyToast(t.pdfSuccess || 'PDF 다운로드가 완료되었습니다.');
+        setTimeout(() => setCopyToast(null), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to download PDF:', err);
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  };
+
   const handleCopyUrl = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const url = getFaqShareUrl(id);
@@ -687,6 +724,27 @@ export const IntegratedSearchResults: React.FC<IntegratedSearchResultsProps> = (
                           등록일: {new Date(faq.createdAt).toLocaleDateString('ko-KR')}
                         </span>
                         <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {/* PDF 다운로드 버튼 (URL 복사 좌측) */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDownloadPdf(faq, e)}
+                            disabled={downloadingPdfId === faq.id}
+                            className="px-2.5 py-1.5 bg-red-50/70 hover:bg-red-100 text-red-700 rounded border border-red-200 flex items-center gap-1.5 cursor-pointer transition-colors min-h-[30px] font-medium disabled:opacity-50"
+                            title="게시물 내용을 공식 PDF 문서로 다운로드합니다"
+                          >
+                            {downloadingPdfId === faq.id ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                                <span>{t.pdfDownloading || 'PDF 생성 중...'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <FileDown className="w-3.5 h-3.5 text-red-600" />
+                                <span>{t.downloadPdf || 'PDF 다운로드'}</span>
+                              </>
+                            )}
+                          </button>
+
                           <button
                             onClick={(e) => handleCopyUrl(faq.id, e)}
                             className="px-2.5 py-1.5 bg-white hover:bg-gray-100 text-gray-700 rounded border border-gray-200 flex items-center gap-1.5 cursor-pointer transition-colors min-h-[30px]"

@@ -49,6 +49,9 @@ function MainApp() {
     return targetFaqId;
   });
 
+  const [targetDocId, setTargetDocId] = useState<string | null>(null);
+  const [targetScheduleId, setTargetScheduleId] = useState<string | null>(null);
+
   const { config, isDesignMode, setIsDesignMode } = useTheme();
   const { isAdmin } = useAuth();
 
@@ -57,6 +60,41 @@ function MainApp() {
 
   const handleClearTargetFaqId = useCallback(() => {
     setTargetFaqId(null);
+  }, []);
+
+  const handleClearTargetDocId = useCallback(() => {
+    setTargetDocId(null);
+  }, []);
+
+  const handleClearTargetScheduleId = useCallback(() => {
+    setTargetScheduleId(null);
+  }, []);
+
+  // Universal deep-link navigation handler with specific item highlighting (from Chatbot / notifications / shares)
+  const handleNavigateTabWithItem = useCallback((tab: string, itemId?: string) => {
+    setSearchQuery('');
+    if (tab === 'faq') {
+      setActiveTab('faq');
+      setSelectedCategory('all');
+      if (itemId) {
+        setTargetFaqId(itemId);
+      }
+    } else if (tab === 'downloads') {
+      setActiveTab('downloads');
+      setSelectedCategory('all');
+      if (itemId) {
+        setTargetDocId(itemId);
+      }
+    } else if (tab === 'schedule') {
+      setActiveTab('schedule');
+      if (itemId) {
+        setTargetScheduleId(itemId);
+      }
+    } else if (tab === 'inquiry') {
+      setActiveTab('inquiry');
+    } else if (tab === 'admin') {
+      setActiveTab('admin');
+    }
   }, []);
 
   // Listen for direct deep links / URL search params / hash
@@ -408,6 +446,8 @@ function MainApp() {
                     currentLang={currentLang}
                     selectedCategory={selectedCategory}
                     setSelectedCategory={setSelectedCategory}
+                    targetDocId={targetDocId}
+                    onClearTargetDocId={handleClearTargetDocId}
                   />
                 )}
 
@@ -416,6 +456,8 @@ function MainApp() {
                   <ScheduleSection
                     schedules={schedules}
                     currentLang={currentLang}
+                    targetScheduleId={targetScheduleId}
+                    onClearTargetScheduleId={handleClearTargetScheduleId}
                     onNavigateInquiry={() => setActiveTab('inquiry')}
                   />
                 )}
@@ -442,7 +484,7 @@ function MainApp() {
         <NoticePopup
           config={config}
           currentLang={currentLang}
-          onNavigateTab={(tab) => setActiveTab(tab)}
+          onNavigateTab={(tab) => handleNavigateTabWithItem(tab)}
         />
       )}
 
@@ -453,7 +495,7 @@ function MainApp() {
           faqs={faqs}
           documents={documents}
           schedules={schedules}
-          onNavigateTab={(tab) => setActiveTab(tab as any)}
+          onNavigateTab={handleNavigateTabWithItem}
         />
       )}
     </div>

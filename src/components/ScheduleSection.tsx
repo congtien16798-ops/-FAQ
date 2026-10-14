@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -14,6 +14,8 @@ import { useTheme } from '../context/ThemeContext';
 interface ScheduleSectionProps {
   schedules: ScheduleEvent[];
   currentLang: Language;
+  targetScheduleId?: string | null;
+  onClearTargetScheduleId?: () => void;
   onNavigateInquiry?: () => void;
 }
 
@@ -69,6 +71,8 @@ const SEMESTER_TABS: SemesterTabInfo[] = [
 export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
   schedules,
   currentLang,
+  targetScheduleId,
+  onClearTargetScheduleId,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
@@ -83,8 +87,60 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
     () => (config.currentAcademicTerm as ScheduleTerm) || 'spring'
   );
   const [hasUserManuallySelected, setHasUserManuallySelected] = useState<boolean>(false);
+  const [highlightedScheduleId, setHighlightedScheduleId] = useState<string | null>(null);
+  const lastTargetHandledRef = useRef<string | null>(null);
 
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
+
+  // Auto-scroll, switch semester/year, and highlight target schedule event when navigated from Chatbot
+  useEffect(() => {
+    if (!targetScheduleId) return;
+    if (lastTargetHandledRef.current === targetScheduleId) return;
+
+    const foundSchedule = (schedules || []).find((s) => s && s.id === targetScheduleId);
+    if (!foundSchedule) return;
+
+    lastTargetHandledRef.current = targetScheduleId;
+
+    // Switch year and term to match this schedule event
+    const sYear = getScheduleYear(foundSchedule);
+    setSelectedYear(sYear);
+    setSelectedTerm(foundSchedule.term);
+    setHasUserManuallySelected(true);
+    setHighlightedScheduleId(foundSchedule.id);
+
+    if (onClearTargetScheduleId) {
+      onClearTargetScheduleId();
+    }
+
+    const scrollToSchedule = () => {
+      const el = document.getElementById(`schedule-${foundSchedule.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    scrollToSchedule();
+    const t1 = setTimeout(scrollToSchedule, 100);
+    const t2 = setTimeout(scrollToSchedule, 300);
+    const t3 = setTimeout(scrollToSchedule, 700);
+
+    const timer = setTimeout(() => {
+      setHighlightedScheduleId(null);
+    }, 4500);
+
+    const resetRefTimer = setTimeout(() => {
+      lastTargetHandledRef.current = null;
+    }, 1200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(timer);
+      clearTimeout(resetRefTimer);
+    };
+  }, [targetScheduleId, schedules, onClearTargetScheduleId]);
 
   // Automatically update initial filter values when admin configuration loads or changes
   useEffect(() => {
@@ -335,8 +391,13 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({
             return (
               <div
                 key={ev.id}
+                id={`schedule-${ev.id}`}
                 onClick={() => setSelectedEvent(ev)}
-                className="bg-white rounded-md border border-[#E2E5E8] hover:border-gray-300 transition-all shadow-2xs overflow-hidden cursor-pointer group"
+                className={`bg-white rounded-md border transition-all shadow-2xs overflow-hidden cursor-pointer group ${
+                  highlightedScheduleId === ev.id
+                    ? 'border-[#1A3B6B] ring-3 ring-[#1A3B6B]/30 shadow-md bg-blue-50/20'
+                    : 'border-[#E2E5E8] hover:border-gray-300'
+                }`}
               >
                 {/* Header Row (Unified with FAQ standard) */}
                 <div className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">

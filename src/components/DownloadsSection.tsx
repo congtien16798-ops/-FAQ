@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FileText, Download, Filter, AlertCircle, FileCheck, CheckCircle2, Globe, Sparkles } from 'lucide-react';
 import { DocumentItem, Language } from '../types';
 import { translations } from '../constants/translations';
@@ -12,6 +12,8 @@ interface DownloadsSectionProps {
   currentLang: Language;
   selectedCategory?: string;
   setSelectedCategory?: (cat: string) => void;
+  targetDocId?: string | null;
+  onClearTargetDocId?: () => void;
 }
 
 export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
@@ -19,6 +21,8 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   currentLang,
   selectedCategory: propCategory,
   setSelectedCategory: propSetCategory,
+  targetDocId,
+  onClearTargetDocId,
 }) => {
   const t = translations[currentLang] || translations.ko;
   const { config } = useTheme();
@@ -27,6 +31,58 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
   const selectedCategory = propCategory !== undefined ? propCategory : internalCategory;
   const setSelectedCategory = propSetCategory || setInternalCategory;
   const [downloadSuccessToast, setDownloadSuccessToast] = useState<string | null>(null);
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
+  const lastTargetHandledRef = useRef<string | null>(null);
+
+  // Auto-scroll, reveal category, and highlight target document when navigated from Chatbot or deep link
+  useEffect(() => {
+    if (!targetDocId) return;
+    if (lastTargetHandledRef.current === targetDocId) return;
+
+    const foundDoc = (documents || []).find((d) => d && d.id === targetDocId);
+    if (!foundDoc) return;
+
+    lastTargetHandledRef.current = targetDocId;
+
+    // Switch category if needed so the target document is visible
+    if (selectedCategory !== 'all' && !matchCategory(foundDoc.category, selectedCategory, config.categories)) {
+      setSelectedCategory('all');
+    }
+
+    setHighlightedDocId(foundDoc.id);
+
+    if (onClearTargetDocId) {
+      onClearTargetDocId();
+    }
+
+    const scrollToDoc = () => {
+      const el = document.getElementById(`doc-${foundDoc.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    scrollToDoc();
+    const t1 = setTimeout(scrollToDoc, 100);
+    const t2 = setTimeout(scrollToDoc, 300);
+    const t3 = setTimeout(scrollToDoc, 700);
+
+    const timer = setTimeout(() => {
+      setHighlightedDocId(null);
+    }, 4500);
+
+    const resetRefTimer = setTimeout(() => {
+      lastTargetHandledRef.current = null;
+    }, 1200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(timer);
+      clearTimeout(resetRefTimer);
+    };
+  }, [targetDocId, documents, selectedCategory, setSelectedCategory, config.categories, onClearTargetDocId]);
 
   // Auto Translation State
   const [transDocMap, setTransDocMap] = useState<Record<string, { title: string; description: string; category: string }>>({});
@@ -297,7 +353,12 @@ export const DownloadsSection: React.FC<DownloadsSectionProps> = ({
             return (
               <div
                 key={`doc-card-${docId}-${idx}`}
-                className="bg-white rounded-md border border-[#E2E5E8] hover:border-gray-300 transition-all shadow-2xs overflow-hidden"
+                id={`doc-${doc.id}`}
+                className={`bg-white rounded-md border transition-all shadow-2xs overflow-hidden ${
+                  highlightedDocId === doc.id
+                    ? 'border-[#2E7D5B] ring-3 ring-[#2E7D5B]/30 shadow-md bg-emerald-50/20'
+                    : 'border-[#E2E5E8] hover:border-gray-300'
+                }`}
               >
                 {/* Main Row / Header */}
                 <div className="px-3.5 sm:px-4.5 py-3 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">

@@ -9,15 +9,20 @@ import {
   Calendar,
   User,
   ChevronDown,
+  ChevronUp,
   Globe,
   ExternalLink,
   HelpCircle,
   Mail,
-  Check
+  Check,
+  CheckCircle2,
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { Language, FaqItem, DocumentItem, ScheduleEvent } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { translateText, translateTexts } from '../services/translator';
+import { triggerDocumentDownload } from '../services/downloadHelper';
 
 export interface RecommendedItem {
   id: string;
@@ -26,6 +31,7 @@ export interface RecommendedItem {
   category?: string;
   snippet?: string;
   actionLabel?: string;
+  rawItem?: FaqItem | DocumentItem | ScheduleEvent;
 }
 
 interface ChatMessage {
@@ -85,6 +91,19 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
   // Active chat language (defaults to portal currentLang, can be changed by user or auto-detected)
   const [chatLang, setChatLang] = useState<Language>(currentLang);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [expandedPreviewId, setExpandedPreviewId] = useState<string | null>(null);
+  const [chatToast, setChatToast] = useState<string | null>(null);
+
+  const handleDirectDownloadDoc = (docItem: DocumentItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      triggerDocumentDownload(docItem);
+      setChatToast(`'${docItem.fileName || docItem.title}' 서식 다운로드를 시작했습니다.`);
+      setTimeout(() => setChatToast(null), 3500);
+    } catch (err) {
+      console.warn('Doc download error:', err);
+    }
+  };
 
   useEffect(() => {
     setChatLang(currentLang);
@@ -429,9 +448,10 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
           }
         }
 
-        // Build recommendations
+        // Build recommendations with raw item references
         const recList: RecommendedItem[] = [];
         for (const m of topMatches) {
+          if (!m || !m.item) continue;
           if (m.type === 'faq') {
             const f = m.item as FaqItem;
             let displayTitle = f.title;
@@ -447,8 +467,9 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
               type: 'faq',
               title: displayTitle,
               category: f.category,
-              snippet: stripHtml(f.content || '').slice(0, 60) + '...',
-              actionLabel: userQueryLang === 'en' ? 'View FAQ' : userQueryLang === 'vi' ? 'Xem FAQ' : userQueryLang === 'zh' ? '查看FAQ' : '해당 FAQ 보기',
+              snippet: stripHtml(f.content || '').slice(0, 80) + '...',
+              actionLabel: userQueryLang === 'en' ? 'Open FAQ' : userQueryLang === 'vi' ? 'Xem FAQ' : userQueryLang === 'zh' ? '查看FAQ' : '해당 FAQ 바로가기',
+              rawItem: f,
             });
           } else if (m.type === 'doc') {
             const d = m.item as DocumentItem;
@@ -466,7 +487,8 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
               title: displayTitle,
               category: d.category,
               snippet: d.description || d.fileName,
-              actionLabel: userQueryLang === 'en' ? 'Download Form' : userQueryLang === 'vi' ? 'Tải biểu mẫu' : userQueryLang === 'zh' ? '下载资料' : '서식 다운로드',
+              actionLabel: userQueryLang === 'en' ? 'Forms & Files' : userQueryLang === 'vi' ? 'Biểu mẫu & Tệp' : userQueryLang === 'zh' ? '资料库' : '서식 바로가기',
+              rawItem: d,
             });
           } else {
             const s = m.item as ScheduleEvent;
@@ -484,7 +506,8 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
               title: displayTitle,
               category: '한국어학당 일정',
               snippet: `${s.startDate} ~ ${s.endDate} (${s.location || '교내'})`,
-              actionLabel: userQueryLang === 'en' ? 'View Schedule' : userQueryLang === 'vi' ? 'Xem lịch trình' : userQueryLang === 'zh' ? '查看日程' : '일정 확인하기',
+              actionLabel: userQueryLang === 'en' ? 'View Schedule' : userQueryLang === 'vi' ? 'Xem lịch' : userQueryLang === 'zh' ? '日程安排' : '학사일정 바로가기',
+              rawItem: s,
             });
           }
         }
@@ -695,6 +718,23 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
             </div>
           </div>
 
+          {/* In-Chat Action Toast */}
+          {chatToast && (
+            <div className="bg-emerald-600 text-white px-3.5 py-2 text-[11px] font-semibold flex items-center justify-between gap-1.5 shadow-xs animate-fade-in shrink-0">
+              <div className="flex items-center gap-1.5 truncate">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-200" />
+                <span className="truncate">{chatToast}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatToast(null)}
+                className="text-white/80 hover:text-white text-xs cursor-pointer p-0.5"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Messages Area */}
           <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-[#F8FAFC]">
             {messages.map((msg) => {
@@ -738,11 +778,25 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                         {msg.recommendations.map((rec) => {
                           const isFaq = rec.type === 'faq';
                           const isDoc = rec.type === 'doc';
+                          const isSchedule = rec.type === 'schedule';
+
+                          const matchedDoc = isDoc
+                            ? ((documents || []).find((d) => d && d.id === rec.id) || (rec.rawItem as DocumentItem))
+                            : null;
+                          const matchedFaq = isFaq
+                            ? ((faqs || []).find((f) => f && f.id === rec.id) || (rec.rawItem as FaqItem))
+                            : null;
+                          const matchedSchedule = isSchedule
+                            ? ((schedules || []).find((s) => s && s.id === rec.id) || (rec.rawItem as ScheduleEvent))
+                            : null;
+
+                          const isPreviewOpen = expandedPreviewId === rec.id;
+
                           return (
                             <div
                               key={rec.id}
                               onClick={() => handleRecommendationClick(rec)}
-                              className="w-full p-2.5 rounded-lg border border-gray-200 bg-white hover:border-[#1A3B6B] hover:shadow-xs transition-all cursor-pointer flex flex-col gap-1 text-left group"
+                              className="w-full p-2.5 rounded-lg border border-gray-200 bg-white hover:border-[#1A3B6B] hover:shadow-xs transition-all cursor-pointer flex flex-col gap-1.5 text-left group"
                             >
                               <div className="flex items-center justify-between">
                                 <span
@@ -768,13 +822,95 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
                                   <ExternalLink className="w-2.5 h-2.5" />
                                 </span>
                               </div>
-                              <h5 className="font-bold text-gray-900 text-xs group-hover:text-[#1A3B6B] transition-colors line-clamp-1">
+
+                              <h5 className="font-bold text-gray-900 text-xs group-hover:text-[#1A3B6B] transition-colors leading-snug">
                                 {rec.title}
                               </h5>
-                              {rec.snippet && (
-                                <p className="text-[10px] text-gray-500 line-clamp-1">
+
+                              {rec.snippet && !isPreviewOpen && (
+                                <p className="text-[10px] text-gray-500 line-clamp-2 leading-relaxed">
                                   {rec.snippet}
                                 </p>
+                              )}
+
+                              {/* Interactive Actions per Recommendation Type */}
+                              <div className="pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1.5 text-[10px]">
+                                {isDoc && matchedDoc && (
+                                  <>
+                                    <span className="text-gray-400 text-[9px] truncate max-w-[130px]">
+                                      {matchedDoc.fileName || '서식 파일'} {matchedDoc.fileSize ? `(${matchedDoc.fileSize})` : ''}
+                                    </span>
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleDirectDownloadDoc(matchedDoc, e)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#2E7D5B] hover:bg-[#246348] text-white font-bold cursor-pointer transition-colors shadow-2xs"
+                                        title="본 서식 바로 다운로드"
+                                      >
+                                        <Download className="w-2.5 h-2.5" />
+                                        <span>서식 다운로드</span>
+                                      </button>
+                                      <span className="text-[#1A3B6B] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100">
+                                        <span>자료실 보기</span>
+                                        <ExternalLink className="w-2 h-2" />
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+
+                                {isFaq && matchedFaq && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedPreviewId(isPreviewOpen ? null : rec.id);
+                                      }}
+                                      className="text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                                    >
+                                      {isPreviewOpen ? '답변 닫기 ▲' : '답변 미리보기 ▼'}
+                                    </button>
+                                    <span className="text-[#1A3B6B] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100 ml-auto">
+                                      <span>FAQ 열람</span>
+                                      <ExternalLink className="w-2 h-2" />
+                                    </span>
+                                  </>
+                                )}
+
+                                {isSchedule && matchedSchedule && (
+                                  <>
+                                    <span className="text-gray-500 text-[10px] font-medium">
+                                      {matchedSchedule.startDate} {matchedSchedule.startDate !== matchedSchedule.endDate ? `~ ${matchedSchedule.endDate}` : ''}
+                                    </span>
+                                    <span className="text-[#1A3B6B] font-semibold flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100 ml-auto">
+                                      <span>학사일정 보기</span>
+                                      <ExternalLink className="w-2 h-2" />
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* FAQ In-Chat Answer Preview Dropdown */}
+                              {isFaq && matchedFaq && isPreviewOpen && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-1 p-2 rounded bg-blue-50/60 border border-blue-200 text-[11px] text-gray-800 leading-relaxed max-h-48 overflow-y-auto space-y-1"
+                                >
+                                  <div className="font-semibold text-[#1A3B6B] text-[10px] pb-1 border-b border-blue-200 flex items-center justify-between">
+                                    <span>답변 본문 미리보기</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRecommendationClick(rec)}
+                                      className="text-blue-700 hover:underline font-bold"
+                                    >
+                                      전체 페이지에서 보기 →
+                                    </button>
+                                  </div>
+                                  <div
+                                    className="prose prose-xs max-w-none text-gray-700 pt-1"
+                                    dangerouslySetInnerHTML={{ __html: matchedFaq.content || '' }}
+                                  />
+                                </div>
                               )}
                             </div>
                           );

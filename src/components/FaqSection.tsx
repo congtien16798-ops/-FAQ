@@ -308,11 +308,16 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
       setHighlightedId(null);
     }, 4500);
 
+    const resetRefTimer = setTimeout(() => {
+      lastTargetHandledRef.current = null;
+    }, 1200);
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
       clearTimeout(highlightTimer);
+      clearTimeout(resetRefTimer);
     };
   }, [targetFaqId, faqs]);
 
