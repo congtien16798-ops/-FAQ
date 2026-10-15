@@ -28,6 +28,9 @@ import {
   Paperclip,
   Download,
   FolderDown,
+  Maximize2,
+  Minimize2,
+  ExternalLink,
 } from 'lucide-react';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db, safeSetDoc, handleFirestoreError, OperationType } from '../../firebase';
@@ -78,6 +81,13 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
   const faqAttachmentInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+
+  // Modal Expansion State (Requirement 5)
+  const [isModalExpanded, setIsModalExpanded] = useState(false);
+
+  // Administrative Document Search & Linkage State (Requirements 2, 3)
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [isDocSearchOpen, setIsDocSearchOpen] = useState(false);
 
   // Delete & Hide Management Dialog State
   const [deleteTarget, setDeleteTarget] = useState<FaqItem | null>(null);
@@ -261,6 +271,9 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     setImageUrl('');
     setAttachments([]);
     setRelatedDocumentIds([]);
+    setDocSearchQuery('');
+    setIsDocSearchOpen(false);
+    setIsModalExpanded(false);
     setIsEditing(true);
   };
 
@@ -274,8 +287,24 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     setImageUrl(faq.imageUrl || '');
     setAttachments(faq.attachments || []);
     setRelatedDocumentIds(faq.relatedDocumentIds || []);
+    setDocSearchQuery('');
+    setIsDocSearchOpen(false);
+    setIsModalExpanded(false);
     setIsEditing(true);
   };
+
+  // Filtered documents for modal search
+  const searchedDocuments = (documents || []).filter((doc) => {
+    if (!docSearchQuery.trim()) return true;
+    const q = docSearchQuery.toLowerCase();
+    return (
+      (doc.title && doc.title.toLowerCase().includes(q)) ||
+      (doc.category && doc.category.toLowerCase().includes(q)) ||
+      (doc.description && doc.description.toLowerCase().includes(q)) ||
+      (doc.fileName && doc.fileName.toLowerCase().includes(q)) ||
+      (doc.fileType && doc.fileType.toLowerCase().includes(q))
+    );
+  });
 
   // Attachment and Document Helpers
   const handleUploadAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,9 +330,22 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     showToast(`${files.length}개 파일이 첨부되었습니다.`);
   };
 
+  // Requirement 1: 파일 다운로드 카드 삭제 기능
   const handleRemoveAttachment = (attId: string) => {
+    const targetAtt = attachments.find((a) => a.id === attId);
     setAttachments((prev) => prev.filter((a) => a.id !== attId));
-    showToast('첨부파일이 제거되었습니다.');
+    if (targetAtt) {
+      setContent((prev) => {
+        const div = document.createElement('div');
+        div.innerHTML = prev;
+        const matchingCards = div.querySelectorAll(`.faq-inline-file-box[data-file-name="${targetAtt.name}"]`);
+        matchingCards.forEach((c) => c.remove());
+        return div.innerHTML;
+      });
+      showToast(`'${targetAtt.name}' 파일 및 다운로드 카드가 삭제되었습니다.`);
+    } else {
+      showToast('첨부파일이 제거되었습니다.');
+    }
   };
 
   const handleInsertAttachmentToContent = (att: FaqAttachment) => {
@@ -315,17 +357,27 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     else if (ext === 'xlsx' || ext === 'xls') badgeBg = '#16A34A';
 
     const fileHtml = `
-      <div class="faq-inline-file-box" data-file-name="${att.name}" data-file-url="${att.url}" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: inherit;">
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+      <div class="faq-inline-file-box" data-file-name="${att.name}" data-file-url="${att.url}" draggable="true" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: inherit; position: relative;">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #64748B; background: #E2E8F0; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
+            <span>⠿</span>
+            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▲</button>
+            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▼</button>
+          </div>
           <span style="background-color: ${badgeBg}; color: #ffffff; font-weight: bold; font-size: 10px; padding: 3px 6px; border-radius: 4px; text-transform: uppercase;">${ext}</span>
           <div style="min-width: 0;">
             <div style="font-weight: 600; font-size: 13px; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${att.name}</div>
             <div style="font-size: 11px; color: #64748B;">용량: ${att.size}</div>
           </div>
         </div>
-        <a href="${att.url}" download="${att.name}" style="background-color: #1A3B6B; color: #ffffff; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
-          <span>다운로드</span>
-        </a>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <a href="${att.url}" download="${att.name}" style="background-color: #1A3B6B; color: #ffffff; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
+            <span>다운로드</span>
+          </a>
+          <button type="button" class="btn-delete-inline-file" title="파일 다운로드 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; padding: 5px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+            <span>삭제 ✕</span>
+          </button>
+        </div>
       </div>
       <p><br></p>
     `;
@@ -334,11 +386,31 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
   };
 
   const handleToggleRelatedDocument = (docId: string) => {
-    setRelatedDocumentIds((prev) =>
-      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]
-    );
+    const isCurrentlyLinked = relatedDocumentIds.includes(docId);
+    if (isCurrentlyLinked) {
+      handleRemoveRelatedDocument(docId);
+    } else {
+      setRelatedDocumentIds((prev) => [...prev, docId]);
+      const docItem = (documents || []).find((d) => d.id === docId);
+      showToast(`'${docItem?.title || '서식'}' 행정 서식이 연동되었습니다.`);
+    }
   };
 
+  // Requirement 2: 서식 자료실 연동 삭제 기능
+  const handleRemoveRelatedDocument = (docId: string) => {
+    const docItem = (documents || []).find((d) => d.id === docId);
+    setRelatedDocumentIds((prev) => prev.filter((id) => id !== docId));
+    setContent((prev) => {
+      const div = document.createElement('div');
+      div.innerHTML = prev;
+      const matchingCards = div.querySelectorAll(`.faq-doc-shortcut-card[data-doc-id="${docId}"]`);
+      matchingCards.forEach((c) => c.remove());
+      return div.innerHTML;
+    });
+    showToast(`'${docItem?.title || '서식'}' 서식 자료실 연동 및 카드가 삭제되었습니다.`);
+  };
+
+  // Requirement 3: 서식 및 자료실 바로가기 및 즉시 다운로드 연동 본문 카드 삽입
   const handleInsertDocToContent = (doc: DocumentItem) => {
     let typeBadgeBg = '#1A3B6B';
     if (doc.fileType === 'pdf') typeBadgeBg = '#DC2626';
@@ -347,14 +419,24 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
     else if (doc.fileType === 'xlsx') typeBadgeBg = '#16A34A';
 
     const shortcutHtml = `
-      <div class="faq-doc-shortcut-card" data-doc-id="${doc.id}" style="background-color: #F0F5FA; border: 1.5px solid #1A3B6B; border-radius: 8px; padding: 14px 18px; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; font-family: inherit;">
+      <div class="faq-doc-shortcut-card" data-doc-id="${doc.id}" draggable="true" style="background-color: #F0F5FA; border: 1.5px solid #1A3B6B; border-radius: 8px; padding: 14px 18px; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; font-family: inherit; position: relative;">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #1A3B6B; background: #DBEAFE; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
+              <span>⠿</span>
+              <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▲</button>
+              <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▼</button>
+            </div>
             <span style="background-color: #1A3B6B; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 4px;">서식 및 자료실</span>
             <span style="background-color: ${typeBadgeBg}; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">${doc.fileType}</span>
             <span style="font-size: 11px; color: #64748B;">[${doc.category}]</span>
           </div>
-          <span style="font-size: 11px; color: #64748B; font-weight: 500;">용량: ${doc.fileSize}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #64748B; font-weight: 500;">용량: ${doc.fileSize}</span>
+            <button type="button" class="btn-delete-doc-shortcut" data-doc-id="${doc.id}" title="서식자료실 연동 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 3px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+              <span>연동 삭제 ✕</span>
+            </button>
+          </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <div>
@@ -362,10 +444,10 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
             ${doc.description ? `<div style="font-size: 11.5px; color: #475569; margin-top: 2px;">${doc.description}</div>` : ''}
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <button type="button" class="btn-faq-doc-download" data-doc-id="${doc.id}" style="background-color: #1A3B6B; color: #ffffff; font-size: 12px; font-weight: bold; padding: 6px 14px; border-radius: 5px; border: none; cursor: pointer;">
+            <button type="button" class="btn-faq-doc-download" data-doc-id="${doc.id}" style="background-color: #1A3B6B; color: #ffffff; font-size: 12px; font-weight: bold; padding: 6px 14px; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
               <span>즉시 다운로드</span>
             </button>
-            <a href="#downloads" style="background-color: #ffffff; color: #1A3B6B; border: 1px solid #1A3B6B; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 5px; text-decoration: none;">
+            <a href="#downloads" class="btn-faq-doc-navigate" style="background-color: #ffffff; color: #1A3B6B; border: 1px solid #1A3B6B; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
               <span>자료실 보기</span>
             </a>
           </div>
@@ -1221,21 +1303,52 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
 
       {/* ===================== MODAL: CREATE / EDIT FAQ ===================== */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-md max-w-4xl w-full p-6 max-h-[92vh] overflow-y-auto border border-[#E2E5E8] shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4">
-              <h4 className="text-base font-bold text-gray-900">
-                {editingId ? 'FAQ 수정' : '새 FAQ 작성'}
-              </h4>
-              <button
-                onClick={() => setIsEditing(false)}
-                className="text-gray-400 hover:text-gray-700 text-sm font-bold cursor-pointer"
-              >
-                ✕
-              </button>
+        <div className={`fixed inset-0 z-50 bg-black/60 flex items-center justify-center backdrop-blur-xs transition-all ${
+          isModalExpanded ? 'p-0' : 'p-3 sm:p-4'
+        }`}>
+          <div className={`bg-white border border-[#E2E5E8] shadow-2xl flex flex-col transition-all ${
+            isModalExpanded
+              ? 'w-full h-full max-w-none max-h-none rounded-none p-4 sm:p-6'
+              : 'rounded-lg max-w-4xl w-full p-5 sm:p-6 max-h-[94vh]'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <h4 className="text-base font-bold text-gray-900">
+                  {editingId ? 'FAQ 수정' : '새 FAQ 작성'}
+                </h4>
+                {isModalExpanded ? (
+                  <span className="px-2 py-0.5 rounded bg-blue-50 text-[#1A3B6B] text-[11px] font-bold border border-blue-200">
+                    전체화면 확장 모드 (넓은 화면에서 작성 중)
+                  </span>
+                ) : (
+                  <span className="text-xs text-gray-500 font-medium hidden sm:inline">
+                    (서식 작성 및 행정 서식/파일 연동)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Expand / Collapse Button (Requirement 5) */}
+                <button
+                  type="button"
+                  onClick={() => setIsModalExpanded((prev) => !prev)}
+                  className="px-2.5 py-1.5 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                  title={isModalExpanded ? '기본 창 크기로 축소' : '더 큰 화면에서 작성하기 (편집창 전체 확장)'}
+                >
+                  {isModalExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
+                  <span className="hidden sm:inline">{isModalExpanded ? '창 축소' : '편집창 전체 확장'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="p-1 rounded text-gray-400 hover:text-gray-700 text-sm font-bold cursor-pointer"
+                  title="닫기"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <form onSubmit={handleSave} className="space-y-4 text-xs flex-1 min-h-0 overflow-y-auto pr-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-gray-700 mb-1">
@@ -1289,24 +1402,289 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                     <span>답변 본문 내용</span>
                     <span className="text-red-500">*</span>
                     <span className="text-[11px] font-normal text-gray-500">
-                      (서식 편집, 8~20px 글자 크기, 글꼴 및 글자색 다양화, 안내 박스, 줄 높이, 파일/서식 연동)
+                      (서식 편집, 글꼴 다양화, 안내 박스, 파일/서식 카드, 표, 드래그 앤 드롭 이동 및 삭제 지원)
                     </span>
                   </label>
-                  <div className="flex items-center gap-1 text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">
-                    <span>↕ 본문 스크롤바(Scrollbar) 지원</span>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">
+                      ⠿ 드래그 앤 드롭 이동 및 삭제 지원
+                    </span>
+                    <span className="text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-200 font-medium hidden sm:inline">
+                      ↕ 본문 스크롤바 지원
+                    </span>
                   </div>
                 </div>
                 <RichTextEditor
                   value={content}
                   onChange={setContent}
                   placeholder="답변 내용을 자유롭게 작성하세요..."
-                  minHeight="280px"
-                  maxHeight="450px"
+                  minHeight={isModalExpanded ? '380px' : '280px'}
+                  maxHeight={isModalExpanded ? '600px' : '450px'}
                   documents={documents}
                 />
               </div>
 
+              {/* Requirement 3: 서식 및 자료실 바로가기 및 즉시 다운로드 연동 */}
+              <div className="p-3.5 rounded-lg border border-indigo-200 bg-indigo-50/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                  <div>
+                    <label className="font-bold text-indigo-950 flex items-center gap-1.5 text-xs">
+                      <FolderDown className="w-4 h-4 text-indigo-700" />
+                      <span>서식 자료실 연동 관리 (관련 서식 바로가기 & 즉시 다운로드)</span>
+                    </label>
+                    <p className="text-[11px] text-indigo-800 mt-0.5">
+                      기존에 등록된 행정 서식 목록을 검색하고 연동할 수 있습니다. 학생 화면에 ‘관련 서식 및 자료실 바로가기’ 카드가 표시되어, 게시글을 읽으며 해당 서식을 즉시 다운로드하거나 자료실 탭으로 바로 이동할 수 있습니다.
+                    </p>
+                  </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-semibold shrink-0 self-start sm:self-auto">
+                    현재 연동 서식: {relatedDocumentIds.length}개
+                  </span>
+                </div>
 
+                {/* Search existing admin documents to link */}
+                <div className="space-y-2 mb-3">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      value={docSearchQuery}
+                      onChange={(e) => setDocSearchQuery(e.target.value)}
+                      placeholder="연동할 행정 서식명, 구분, 파일명 검색 (예: D-4, 체류, 시간제취업)..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-white rounded border border-indigo-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {docSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setDocSearchQuery('')}
+                        className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Search Results Dropdown/Box when searching */}
+                  {docSearchQuery.trim() && (
+                    <div className="max-h-48 overflow-y-auto bg-white border border-indigo-200 rounded-md p-2 space-y-1 shadow-sm">
+                      <div className="text-[11px] font-semibold text-gray-500 px-1 pb-1 border-b border-gray-100 flex items-center justify-between">
+                        <span>검색된 행정 서식 ({searchedDocuments.length}건)</span>
+                        <span className="text-[10px] text-indigo-600">클릭하여 연동 추가</span>
+                      </div>
+                      {searchedDocuments.length === 0 ? (
+                        <div className="py-3 text-center text-gray-400 text-xs">
+                          일치하는 행정 서식이 없습니다.
+                        </div>
+                      ) : (
+                        searchedDocuments.map((doc) => {
+                          const isLinked = relatedDocumentIds.includes(doc.id);
+                          return (
+                            <div
+                              key={doc.id}
+                              className={`p-2 rounded border flex items-center justify-between gap-2 transition-colors ${
+                                isLinked ? 'bg-indigo-50/70 border-indigo-300' : 'bg-gray-50 hover:bg-white border-gray-200'
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase bg-[#1A3B6B]">
+                                    {doc.fileType}
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
+                                    {doc.category}
+                                  </span>
+                                  <span className="font-semibold text-gray-800 text-xs truncate">
+                                    {doc.title}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                  용량: {doc.fileSize} {doc.description ? `· ${doc.description}` : ''}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleRelatedDocument(doc.id)}
+                                  className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-colors ${
+                                    isLinked
+                                      ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs'
+                                  }`}
+                                >
+                                  {isLinked ? '연동 해제 ✕' : '+ 연동 추가'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsertDocToContent(doc)}
+                                  className="px-2 py-1 rounded bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-xs font-medium cursor-pointer"
+                                  title="본문 커서 위치에 바로가기 카드 삽입"
+                                >
+                                  본문 삽입
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* List of Currently Linked Documents */}
+                {relatedDocumentIds.length > 0 ? (
+                  <div className="space-y-2 mt-2">
+                    <div className="text-[11px] font-semibold text-indigo-900 flex items-center justify-between">
+                      <span>연동 완료된 서식 목록 (학생 화면에 바로가기 카드 자동 노출):</span>
+                      <span className="text-[10px] text-gray-500">본문 삽입 시 본문 중간에도 표시됩니다</span>
+                    </div>
+                    {relatedDocumentIds.map((docId) => {
+                      const doc = documents?.find((d) => d.id === docId);
+                      if (!doc) return null;
+                      return (
+                        <div
+                          key={doc.id}
+                          className="p-2.5 bg-white rounded-md border border-indigo-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase bg-[#1A3B6B]">
+                                {doc.fileType}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
+                                {doc.category}
+                              </span>
+                              <span className="font-bold text-gray-900 text-xs">
+                                📄 {doc.title}
+                              </span>
+                              <span className="text-[11px] text-gray-400">({doc.fileSize})</span>
+                            </div>
+                            {doc.description && (
+                              <p className="text-[11px] text-gray-500 mt-0.5 truncate">{doc.description}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleInsertDocToContent(doc)}
+                              className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-[#1A3B6B] border border-blue-200 text-xs font-semibold cursor-pointer"
+                              title="본문 내용에 이 서식 바로가기 카드 삽입"
+                            >
+                              본문에 카드 삽입
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => triggerDocumentDownload(doc)}
+                              className="px-2.5 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300 text-xs font-medium cursor-pointer flex items-center gap-1"
+                              title="서식 파일 즉시 다운로드 테스트"
+                            >
+                              <Download className="w-3 h-3 text-gray-500" />
+                              <span>즉시 다운로드</span>
+                            </button>
+                            {/* Requirement 2: 서식 자료실 연동 삭제 기능 */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRelatedDocument(doc.id)}
+                              className="px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold cursor-pointer flex items-center gap-1"
+                              title="이 FAQ에서 서식 연동 삭제 및 본문 카드 삭제"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>연동 삭제</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-2.5 px-3 bg-white/70 rounded border border-dashed border-indigo-200 text-center text-gray-500 text-xs">
+                    상단 검색창에서 관련 행정 서식을 검색하여 연동해 보세요. 연동 시 학생 화면에 ‘관련 서식 및 자료실 바로가기’가 자동으로 안내됩니다.
+                  </div>
+                )}
+              </div>
+
+              {/* Requirement 1: 파일 첨부 및 파일 다운로드 카드 삭제 기능 */}
+              <div className="p-3.5 rounded-lg border border-gray-200 bg-gray-50/70">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                  <div>
+                    <label className="font-bold text-gray-800 flex items-center gap-1.5 text-xs">
+                      <Paperclip className="w-4 h-4 text-[#1A3B6B]" />
+                      <span>게시글 첨부파일 및 다운로드 카드 관리</span>
+                    </label>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      FAQ 게시글에 직접 파일을 첨부하고 본문에 다운로드 카드를 삽입하거나 삭제할 수 있습니다.
+                    </p>
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      ref={faqAttachmentInputRef}
+                      onChange={handleUploadAttachment}
+                      multiple
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => faqAttachmentInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded bg-[#1A3B6B] hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>파일 첨부하기</span>
+                    </button>
+                  </div>
+                </div>
+
+                {attachments.length > 0 ? (
+                  <div className="space-y-2 mt-2">
+                    {attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="p-2.5 bg-white rounded border border-gray-200 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase bg-slate-700">
+                            {att.type || 'file'}
+                          </span>
+                          <span className="font-medium text-gray-800 truncate text-xs">
+                            {att.name}
+                          </span>
+                          <span className="text-[11px] text-gray-400">({att.size})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleInsertAttachmentToContent(att)}
+                            className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-[#1A3B6B] border border-blue-200 text-xs font-semibold cursor-pointer"
+                          >
+                            본문 삽입
+                          </button>
+                          <a
+                            href={att.url}
+                            download={att.name}
+                            className="px-2.5 py-1 rounded bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-300 text-xs font-medium cursor-pointer flex items-center gap-1"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>다운로드</span>
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(att.id)}
+                            className="px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold cursor-pointer flex items-center gap-1"
+                            title="첨부파일 및 본문 다운로드 카드 삭제"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>파일 삭제</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-2 px-3 bg-white/70 rounded border border-dashed border-gray-200 text-center text-gray-400 text-xs">
+                    첨부된 파일이 없습니다. 필요 시 파일을 첨부하고 본문에 다운로드 카드를 배치할 수 있습니다.
+                  </div>
+                )}
+              </div>
 
               {/* Hide from students toggle */}
               <div className="p-3 rounded bg-amber-50/70 border border-amber-200">

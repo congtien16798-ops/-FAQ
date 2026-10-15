@@ -575,6 +575,23 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                             }
                           }
                         }
+
+                        const navDocBtn = target.closest('.btn-faq-doc-navigate') as HTMLElement | null;
+                        if (navDocBtn) {
+                          e.preventDefault();
+                          const parentCard = navDocBtn.closest('.faq-doc-shortcut-card');
+                          const docId = parentCard?.getAttribute('data-doc-id');
+                          if (docId && onNavigateToDownloads) {
+                            const foundDoc = documents.find((d) => d.id === docId);
+                            if (foundDoc) {
+                              onNavigateToDownloads(foundDoc.category, foundDoc.id);
+                              return;
+                            }
+                          } else if (onNavigateToDownloads) {
+                            onNavigateToDownloads();
+                            return;
+                          }
+                        }
                       }}
                       className="prose prose-sm max-w-none text-gray-800 leading-relaxed overflow-x-auto break-word-safe [&_img]:cursor-zoom-in [&_img]:transition-all [&_img:hover]:opacity-95 [&_img]:max-w-full [&_table]:overflow-x-auto [&_table]:block sm:[&_table]:table"
                       dangerouslySetInnerHTML={{ __html: contentText }}

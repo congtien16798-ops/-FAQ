@@ -39,7 +39,12 @@ import {
   AlertOctagon,
   Lightbulb,
   Maximize2,
+  Minimize2,
   Search,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
+  Move,
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -215,6 +220,26 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [docSearchQuery, setDocSearchQuery] = useState('');
   const [availableDocs, setAvailableDocs] = useState<DocumentItem[]>([]);
 
+  // Card Selection & Fullscreen State (Requirements 1, 2, 5)
+  const [selectedFileBoxEl, setSelectedFileBoxEl] = useState<HTMLElement | null>(null);
+  const [selectedDocCardEl, setSelectedDocCardEl] = useState<HTMLElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Keyboard shortcut: ESC to exit fullscreen or unselect cards
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isFullscreen) setIsFullscreen(false);
+        setSelectedFileBoxEl(null);
+        setSelectedDocCardEl(null);
+        setSelectedBoxEl(null);
+        setSelectedImg(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
   // Load available documents from props or local cache
   useEffect(() => {
     if (propDocuments && propDocuments.length > 0) {
@@ -302,6 +327,122 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     editorRef.current?.focus();
     document.execCommand('insertHTML', false, html);
     handleEditorInput();
+  };
+
+  // Block Movement Helper (One-click Move Up / Move Down for boxes, file boxes, doc cards, tables)
+  const moveElement = (el: HTMLElement, direction: 'up' | 'down') => {
+    if (!el || !el.parentElement) return;
+    const parent = el.parentElement;
+    if (direction === 'up') {
+      const prev = el.previousElementSibling;
+      if (prev) {
+        parent.insertBefore(el, prev);
+      }
+    } else {
+      const next = el.nextElementSibling;
+      if (next) {
+        if (next.nextElementSibling) {
+          parent.insertBefore(el, next.nextElementSibling);
+        } else {
+          parent.appendChild(el);
+        }
+      }
+    }
+    handleEditorInput();
+  };
+
+  // Drag-and-drop Block Reordering Support
+  const draggedBlockRef = useRef<HTMLElement | null>(null);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    const target = e.target as HTMLElement;
+    // Find closest movable block (box, file box, doc card, table container)
+    const block = target.closest(
+      '.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table'
+    ) as HTMLElement | null;
+    if (block && editorRef.current?.contains(block)) {
+      draggedBlockRef.current = block;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'rte-draggable-block');
+      block.style.opacity = '0.4';
+      block.style.outline = '2px dashed #2563EB';
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!draggedBlockRef.current) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    const target = e.target as HTMLElement;
+    if (!editorRef.current?.contains(target)) return;
+
+    // Find candidate drop target block
+    const targetBlock = target.closest(
+      '.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table, p, h1, h2, h3, h4, ul, ol, blockquote'
+    ) as HTMLElement | null;
+
+    if (targetBlock && targetBlock !== draggedBlockRef.current && editorRef.current.contains(targetBlock)) {
+      const rect = targetBlock.getBoundingClientRect();
+      const isTop = e.clientY < rect.top + rect.height / 2;
+
+      let indicator = document.getElementById('rte-drop-indicator');
+      if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'rte-drop-indicator';
+        indicator.style.cssText =
+          'height: 4px; background: #2563EB; border-radius: 2px; margin: 6px 0; box-shadow: 0 0 8px rgba(37,99,235,0.7); pointer-events: none; transition: all 0.15s ease;';
+      }
+
+      if (isTop) {
+        targetBlock.parentElement?.insertBefore(indicator, targetBlock);
+      } else {
+        if (targetBlock.nextSibling) {
+          targetBlock.parentElement?.insertBefore(indicator, targetBlock.nextSibling);
+        } else {
+          targetBlock.parentElement?.appendChild(indicator);
+        }
+      }
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget === e.target) {
+      const indicator = document.getElementById('rte-drop-indicator');
+      indicator?.remove();
+    }
+  };
+
+  const handleDragEnd = () => {
+    const indicator = document.getElementById('rte-drop-indicator');
+    indicator?.remove();
+    if (draggedBlockRef.current) {
+      draggedBlockRef.current.style.opacity = '';
+      draggedBlockRef.current.style.outline = '';
+      draggedBlockRef.current = null;
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const indicator = document.getElementById('rte-drop-indicator');
+    const dragged = draggedBlockRef.current;
+
+    if (dragged && indicator && indicator.parentElement) {
+      indicator.parentElement.insertBefore(dragged, indicator);
+      indicator.remove();
+      dragged.style.opacity = '';
+      dragged.style.outline = '';
+      draggedBlockRef.current = null;
+      handleEditorInput();
+    } else {
+      indicator?.remove();
+      if (dragged) {
+        dragged.style.opacity = '';
+        dragged.style.outline = '';
+        draggedBlockRef.current = null;
+      }
+    }
   };
 
   // 1. Font Family Application (Requirement 1)
@@ -475,7 +616,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     const boxHtml = `
-      <div class="faq-callout-box" data-box-type="${boxPreset}" style="background-color: ${boxBgColor}; ${borderCss} border-radius: ${boxRadius}; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; transition: all 0.2s ease;">
+      <div class="faq-callout-box" data-box-type="${boxPreset}" draggable="true" style="background-color: ${boxBgColor}; ${borderCss} border-radius: ${boxRadius}; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; transition: all 0.2s ease; position: relative;">
+        <div class="box-action-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; user-select: none;">
+          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #64748B; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; cursor: grab;">
+            <span>⠿ 드래그 이동</span>
+            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▲</button>
+            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▼</button>
+          </div>
+          <button type="button" class="btn-delete-callout-box" title="박스 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+            <span>삭제 ✕</span>
+          </button>
+        </div>
         ${boxTitle ? `<div style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: ${boxBorderColor}; margin-bottom: 6px; font-size: 13.5px;">${boxIcon ? `<span>${boxIcon}</span>` : ''}<span>${boxTitle}</span></div>` : ''}
         <div style="margin: 0; color: #1e293b;">${boxContent}</div>
       </div>
@@ -515,17 +666,27 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     else if (pendingFileType === 'xlsx' || pendingFileType === 'xls') badgeBg = '#16A34A';
 
     const fileBoxHtml = `
-      <div class="faq-inline-file-box" data-file-name="${pendingFileName}" data-file-url="${pendingFileDataUrl}" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: inherit;">
-        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+      <div class="faq-inline-file-box" data-file-name="${pendingFileName}" data-file-url="${pendingFileDataUrl}" draggable="true" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: inherit; position: relative;">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #64748B; background: #E2E8F0; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
+            <span>⠿</span>
+            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▲</button>
+            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▼</button>
+          </div>
           <span style="background-color: ${badgeBg}; color: #ffffff; font-weight: bold; font-size: 10px; padding: 3px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${pendingFileType}</span>
           <div style="min-width: 0;">
             <div style="font-weight: 600; font-size: 13px; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${pendingFileName}</div>
             <div style="font-size: 11px; color: #64748B;">파일 크기: ${pendingFileSize}</div>
           </div>
         </div>
-        <a href="${pendingFileDataUrl}" download="${pendingFileName}" style="background-color: #1A3B6B; color: #ffffff; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
-          <span>다운로드</span>
-        </a>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <a href="${pendingFileDataUrl}" download="${pendingFileName}" style="background-color: #1A3B6B; color: #ffffff; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
+            <span>다운로드</span>
+          </a>
+          <button type="button" class="btn-delete-inline-file" title="파일 다운로드 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; padding: 5px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+            <span>삭제 ✕</span>
+          </button>
+        </div>
       </div>
       <p><br></p>
     `;
@@ -545,14 +706,24 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     else if (doc.fileType === 'xlsx') typeBadgeBg = '#16A34A';
 
     const shortcutHtml = `
-      <div class="faq-doc-shortcut-card" data-doc-id="${doc.id}" style="background-color: #F0F5FA; border: 1.5px solid #1A3B6B; border-radius: 8px; padding: 14px 18px; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; font-family: inherit;">
-        <div style="display: flex; items-center; justify-content: space-between; gap: 8px;">
+      <div class="faq-doc-shortcut-card" data-doc-id="${doc.id}" draggable="true" style="background-color: #F0F5FA; border: 1.5px solid #1A3B6B; border-radius: 8px; padding: 14px 18px; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; font-family: inherit; position: relative;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #1A3B6B; background: #DBEAFE; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
+              <span>⠿</span>
+              <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▲</button>
+              <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▼</button>
+            </div>
             <span style="background-color: #1A3B6B; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 4px;">서식 및 자료실</span>
             <span style="background-color: ${typeBadgeBg}; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">${doc.fileType}</span>
             <span style="font-size: 11px; color: #64748B;">[${doc.category}]</span>
           </div>
-          <span style="font-size: 11px; color: #64748B; font-weight: 500;">용량: ${doc.fileSize}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; color: #64748B; font-weight: 500;">용량: ${doc.fileSize}</span>
+            <button type="button" class="btn-delete-doc-shortcut" data-doc-id="${doc.id}" title="서식자료실 연동 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 3px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+              <span>연동 삭제 ✕</span>
+            </button>
+          </div>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <div>
@@ -563,7 +734,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <button type="button" class="btn-faq-doc-download" data-doc-id="${doc.id}" style="background-color: #1A3B6B; color: #ffffff; font-size: 12px; font-weight: bold; padding: 6px 14px; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
               <span>즉시 다운로드</span>
             </button>
-            <a href="#downloads" style="background-color: #ffffff; color: #1A3B6B; border: 1px solid #1A3B6B; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+            <a href="#downloads" class="btn-faq-doc-navigate" style="background-color: #ffffff; color: #1A3B6B; border: 1px solid #1A3B6B; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
               <span>자료실 보기</span>
             </a>
           </div>
@@ -702,7 +873,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     const tableHtml = `
-      <div class="table-responsive" style="overflow-x: auto; margin: 14px 0;">
+      <div class="table-responsive" draggable="true" style="overflow-x: auto; margin: 14px 0; position: relative;">
+        <div class="table-action-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; user-select: none;">
+          <div class="block-drag-handle" draggable="true" title="표를 잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #64748B; background: #F1F5F9; padding: 2px 6px; border-radius: 4px; cursor: grab;">
+            <span>⠿ 표 이동</span>
+            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▲</button>
+            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▼</button>
+          </div>
+          <button type="button" class="btn-delete-table" title="표 전체 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+            <span>표 삭제 ✕</span>
+          </button>
+        </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid ${borderColor}; background-color: #ffffff;">
           ${theadHtml}
           <tbody>${tbodyHtml}</tbody>
@@ -856,10 +1037,106 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleEditorClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
+    // 1. Direct card deletion buttons clicked
+    const deleteFileBtn = target.closest('.btn-delete-inline-file') as HTMLElement | null;
+    if (deleteFileBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentCard = deleteFileBtn.closest('.faq-inline-file-box');
+      parentCard?.remove();
+      setSelectedFileBoxEl(null);
+      handleEditorInput();
+      return;
+    }
+
+    const deleteDocBtn = target.closest('.btn-delete-doc-shortcut') as HTMLElement | null;
+    if (deleteDocBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentCard = deleteDocBtn.closest('.faq-doc-shortcut-card');
+      parentCard?.remove();
+      setSelectedDocCardEl(null);
+      handleEditorInput();
+      return;
+    }
+
+    const deleteBoxBtn = target.closest('.btn-delete-callout-box') as HTMLElement | null;
+    if (deleteBoxBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentBox = deleteBoxBtn.closest('.faq-callout-box');
+      parentBox?.remove();
+      setSelectedBoxEl(null);
+      handleEditorInput();
+      return;
+    }
+
+    const deleteTableBtn = target.closest('.btn-delete-table') as HTMLElement | null;
+    if (deleteTableBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const parentTable = deleteTableBtn.closest('.table-responsive') || deleteTableBtn.closest('table');
+      parentTable?.remove();
+      setSelectedTable(null);
+      setSelectedCell(null);
+      handleEditorInput();
+      return;
+    }
+
+    // Direct move buttons clicked
+    const moveUpBtn = target.closest('.btn-block-move-up') as HTMLElement | null;
+    if (moveUpBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const block = moveUpBtn.closest('.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table') as HTMLElement | null;
+      if (block) moveElement(block, 'up');
+      return;
+    }
+
+    const moveDownBtn = target.closest('.btn-block-move-down') as HTMLElement | null;
+    if (moveDownBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const block = moveDownBtn.closest('.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table') as HTMLElement | null;
+      if (block) moveElement(block, 'down');
+      return;
+    }
+
+    // 2. Inline File Download Box selected
+    const fileBox = target.closest('.faq-inline-file-box') as HTMLElement | null;
+    if (fileBox) {
+      setSelectedFileBoxEl(fileBox);
+      setSelectedDocCardEl(null);
+      setSelectedBoxEl(null);
+      setSelectedImg(null);
+      setSelectedCell(null);
+      setSelectedTable(null);
+    } else if (!target.closest('#filebox-control-bar')) {
+      setSelectedFileBoxEl(null);
+    }
+
+    // 3. Library Document Shortcut Card selected
+    const docCard = target.closest('.faq-doc-shortcut-card') as HTMLElement | null;
+    if (docCard) {
+      setSelectedDocCardEl(docCard);
+      setSelectedFileBoxEl(null);
+      setSelectedBoxEl(null);
+      setSelectedImg(null);
+      setSelectedCell(null);
+      setSelectedTable(null);
+    } else if (!target.closest('#doccard-control-bar')) {
+      setSelectedDocCardEl(null);
+    }
+
     // Check if clicked a callout box
     const box = target.closest('.faq-callout-box') as HTMLElement | null;
     if (box) {
       setSelectedBoxEl(box);
+      setSelectedFileBoxEl(null);
+      setSelectedDocCardEl(null);
+      setSelectedImg(null);
+      setSelectedCell(null);
+      setSelectedTable(null);
     } else if (!target.closest('#box-control-bar')) {
       setSelectedBoxEl(null);
     }
@@ -876,6 +1153,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
       setSelectedCell(null);
       setSelectedTable(null);
+      setSelectedBoxEl(null);
+      setSelectedFileBoxEl(null);
+      setSelectedDocCardEl(null);
       return;
     }
 
@@ -883,7 +1163,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       setSelectedImg(null);
     }
 
-    // Check table cell
+    // Check table cell or table
     const cell = target.closest('td, th') as HTMLTableCellElement | null;
     const table = target.closest('table') as HTMLTableElement | null;
 
@@ -897,14 +1177,51 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       cell.classList.add('cell-selected');
       setSelectedCell(cell);
       setSelectedTable(table);
+      setSelectedBoxEl(null);
+      setSelectedFileBoxEl(null);
+      setSelectedDocCardEl(null);
+      setSelectedImg(null);
     } else if (!target.closest('#table-control-bar')) {
       setSelectedCell(null);
       setSelectedTable(null);
     }
   };
 
-  // Keyboard navigation
+  // Keyboard navigation & card deletion via backspace/delete
   const handleEditorKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (selectedFileBoxEl) {
+        e.preventDefault();
+        selectedFileBoxEl.remove();
+        setSelectedFileBoxEl(null);
+        handleEditorInput();
+        return;
+      }
+      if (selectedDocCardEl) {
+        e.preventDefault();
+        selectedDocCardEl.remove();
+        setSelectedDocCardEl(null);
+        handleEditorInput();
+        return;
+      }
+      if (selectedBoxEl) {
+        e.preventDefault();
+        selectedBoxEl.remove();
+        setSelectedBoxEl(null);
+        handleEditorInput();
+        return;
+      }
+      if (selectedTable) {
+        e.preventDefault();
+        const container = selectedTable.closest('.table-responsive') || selectedTable;
+        container.remove();
+        setSelectedTable(null);
+        setSelectedCell(null);
+        handleEditorInput();
+        return;
+      }
+    }
+
     if (e.key === 'Tab') {
       e.preventDefault();
       if (e.shiftKey) {
@@ -932,7 +1249,35 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   return (
-    <div className="border border-gray-300 rounded-md overflow-hidden bg-white shadow-2xs focus-within:border-[#1A3B6B] transition-colors">
+    <div
+      className={`bg-white transition-all ${
+        isFullscreen
+          ? 'fixed inset-0 z-[100] flex flex-col p-4 shadow-2xl h-screen w-screen overflow-hidden'
+          : 'border border-gray-300 rounded-md overflow-hidden shadow-2xs focus-within:border-[#1A3B6B]'
+      }`}
+    >
+      {/* Fullscreen Mode Top Banner */}
+      {isFullscreen && (
+        <div className="bg-[#1A3B6B] text-white px-4 py-2.5 flex items-center justify-between text-xs font-bold shrink-0 rounded-t-md shadow-xs mb-2">
+          <div className="flex items-center gap-2">
+            <Maximize2 className="w-4 h-4 text-amber-300" />
+            <span>FAQ 답변 본문 내용 전체화면 문서 편집 모드</span>
+            <span className="text-[11px] font-normal text-blue-200 hidden sm:inline">
+              (더 넓은 화면에서 표, 서식, 사진을 여유롭게 작성하세요)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(false)}
+            className="px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded text-xs flex items-center gap-1 cursor-pointer transition-colors"
+            title="기본 크기로 복귀 (ESC)"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>원래 크기로 복귀 (ESC)</span>
+          </button>
+        </div>
+      )}
+
       {/* Hidden File Inputs */}
       <input
         type="file"
@@ -1391,7 +1736,158 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <Code className="w-3.5 h-3.5" />
         </button>
+
+        {/* Fullscreen / Expand Editor Mode (Requirement 5) */}
+        <button
+          type="button"
+          onClick={() => setIsFullscreen((prev) => !prev)}
+          className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+            isFullscreen
+              ? 'bg-amber-400 text-slate-900 shadow-xs'
+              : 'bg-white hover:bg-gray-200 text-gray-700 border border-gray-300'
+          }`}
+          title={isFullscreen ? '창 축소 / 원래 화면으로 복귀 (ESC)' : '문서 편집 창 전체 화면 확장 (더 큰 화면에서 편집)'}
+        >
+          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
+          <span>{isFullscreen ? '창 축소' : '창 확장'}</span>
+        </button>
       </div>
+
+      {/* FLOATING INLINE FILE CONTROLLER (When an inline file card is clicked - Requirement 1) */}
+      {selectedFileBoxEl && !isCodeView && (
+        <div
+          id="filebox-control-bar"
+          className="bg-slate-900 text-white px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md animate-fade-in"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-bold text-amber-400 flex items-center gap-1 text-[11px] shrink-0">
+              <Paperclip className="w-3.5 h-3.5" />
+              <span>선택된 파일 다운로드 카드:</span>
+            </span>
+            <span className="text-slate-200 text-xs font-semibold truncate max-w-[240px]">
+              {selectedFileBoxEl.getAttribute('data-file-name') || '첨부 파일'}
+            </span>
+
+            {/* Position Move Buttons */}
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700 ml-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedFileBoxEl) moveElement(selectedFileBoxEl, 'up');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="파일 다운로드 카드를 본문 위쪽으로 한 칸 이동"
+              >
+                <ArrowUp className="w-3 h-3" />
+                <span>위로 이동</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedFileBoxEl) moveElement(selectedFileBoxEl, 'down');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="파일 다운로드 카드를 본문 아래쪽으로 한 칸 이동"
+              >
+                <ArrowDown className="w-3 h-3" />
+                <span>아래로 이동</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                selectedFileBoxEl.remove();
+                setSelectedFileBoxEl(null);
+                handleEditorInput();
+              }}
+              className="px-2.5 py-1 rounded text-[11px] bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+              title="본문에서 이 파일 다운로드 카드 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>파일 다운로드 카드 삭제</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFileBoxEl(null)}
+              className="p-1 text-slate-400 hover:text-white cursor-pointer"
+              title="닫기"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING DOCUMENT SHORTCUT CONTROLLER (When a library document card is clicked - Requirement 2) */}
+      {selectedDocCardEl && !isCodeView && (
+        <div
+          id="doccard-control-bar"
+          className="bg-slate-900 text-white px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md animate-fade-in"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-bold text-sky-400 flex items-center gap-1 text-[11px] shrink-0">
+              <FolderDown className="w-3.5 h-3.5" />
+              <span>선택된 서식 자료실 연동 카드:</span>
+            </span>
+            <span className="text-slate-200 text-xs font-semibold truncate max-w-[240px]">
+              {selectedDocCardEl.querySelector('.btn-faq-doc-download')?.getAttribute('data-doc-id') || '행정 서식'}
+            </span>
+
+            {/* Position Move Buttons */}
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700 ml-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedDocCardEl) moveElement(selectedDocCardEl, 'up');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="서식자료실 연동 카드를 본문 위쪽으로 한 칸 이동"
+              >
+                <ArrowUp className="w-3 h-3" />
+                <span>위로 이동</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedDocCardEl) moveElement(selectedDocCardEl, 'down');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="서식자료실 연동 카드를 본문 아래쪽으로 한 칸 이동"
+              >
+                <ArrowDown className="w-3 h-3" />
+                <span>아래로 이동</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                selectedDocCardEl.remove();
+                setSelectedDocCardEl(null);
+                handleEditorInput();
+              }}
+              className="px-2.5 py-1 rounded text-[11px] bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+              title="본문에서 이 서식 자료실 연동 카드 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>서식 자료실 연동 삭제</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDocCardEl(null)}
+              className="p-1 text-slate-400 hover:text-white cursor-pointer"
+              title="닫기"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* FLOATING BOX CONTROLLER (When a callout box is clicked in editor) */}
       {selectedBoxEl && !isCodeView && (
@@ -1399,10 +1895,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           id="box-control-bar"
           className="bg-slate-900 text-white px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md animate-fade-in"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-amber-400 flex items-center gap-1 text-[11px]">
               <AlertOctagon className="w-3.5 h-3.5" />
-              <span>선택된 박스 스타일 변경:</span>
+              <span>선택된 안내 박스 편집:</span>
             </span>
 
             {/* Quick Color Chips */}
@@ -1431,6 +1927,32 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 />
               ))}
             </div>
+
+            {/* Position Move Buttons */}
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedBoxEl) moveElement(selectedBoxEl, 'up');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="박스를 본문 위쪽으로 한 칸 이동"
+              >
+                <ArrowUp className="w-3 h-3" />
+                <span>위로 이동</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedBoxEl) moveElement(selectedBoxEl, 'down');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="박스를 본문 아래쪽으로 한 칸 이동"
+              >
+                <ArrowDown className="w-3 h-3" />
+                <span>아래로 이동</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -1443,14 +1965,142 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   handleEditorInput();
                 }
               }}
-              className="px-2 py-0.5 rounded text-[10px] bg-red-900/60 hover:bg-red-800 text-red-200 border border-red-700 cursor-pointer flex items-center gap-1"
+              className="px-2.5 py-1 rounded text-[11px] bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+              title="본문에서 이 박스 삭제"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>박스 삭제</span>
             </button>
             <button
               type="button"
               onClick={() => setSelectedBoxEl(null)}
+              className="p-1 text-slate-400 hover:text-white cursor-pointer"
+              title="닫기"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING TABLE CONTROLLER (When a table is clicked in editor) */}
+      {selectedTable && !isCodeView && (
+        <div
+          id="table-control-bar"
+          className="bg-slate-900 text-white px-3 py-2 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs shadow-md animate-fade-in"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-emerald-400 flex items-center gap-1 text-[11px] shrink-0">
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>선택된 표(Table) 편집:</span>
+            </span>
+
+            {/* Row / Col controls */}
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700">
+              <button
+                type="button"
+                onClick={() => insertRow('above')}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer"
+                title="현재 셀 위쪽에 행 추가"
+              >
+                +행(위)
+              </button>
+              <button
+                type="button"
+                onClick={() => insertRow('below')}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer"
+                title="현재 셀 아래쪽에 행 추가"
+              >
+                +행(아래)
+              </button>
+              <button
+                type="button"
+                onClick={deleteCurrentRow}
+                className="px-2 py-0.5 rounded text-[10px] text-red-300 hover:bg-red-900/60 cursor-pointer"
+                title="현재 행 삭제"
+              >
+                -행 삭제
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700">
+              <button
+                type="button"
+                onClick={() => insertColumn('left')}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer"
+                title="현재 셀 왼쪽에 열 추가"
+              >
+                +열(좌)
+              </button>
+              <button
+                type="button"
+                onClick={() => insertColumn('right')}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer"
+                title="현재 셀 오른쪽에 열 추가"
+              >
+                +열(우)
+              </button>
+              <button
+                type="button"
+                onClick={deleteCurrentColumn}
+                className="px-2 py-0.5 rounded text-[10px] text-red-300 hover:bg-red-900/60 cursor-pointer"
+                title="현재 열 삭제"
+              >
+                -열 삭제
+              </button>
+            </div>
+
+            {/* Move Up / Move Down buttons for table */}
+            <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded border border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  const container = (selectedTable.closest('.table-responsive') as HTMLElement) || selectedTable;
+                  moveElement(container, 'up');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="표를 위쪽으로 한 칸 이동"
+              >
+                <ArrowUp className="w-3 h-3" />
+                <span>위로 이동</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const container = (selectedTable.closest('.table-responsive') as HTMLElement) || selectedTable;
+                  moveElement(container, 'down');
+                }}
+                className="px-2 py-0.5 rounded text-[10px] text-slate-200 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                title="표를 아래쪽으로 한 칸 이동"
+              >
+                <ArrowDown className="w-3 h-3" />
+                <span>아래로 이동</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                const container = selectedTable.closest('.table-responsive') || selectedTable;
+                container.remove();
+                setSelectedTable(null);
+                setSelectedCell(null);
+                handleEditorInput();
+              }}
+              className="px-2.5 py-1 rounded text-[11px] bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer flex items-center gap-1 shadow-xs transition-colors"
+              title="본문에서 이 표 전체 삭제"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>표 전체 삭제</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTable(null);
+                setSelectedCell(null);
+              }}
               className="p-1 text-slate-400 hover:text-white cursor-pointer"
               title="닫기"
             >
@@ -1539,7 +2189,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       )}
 
       {/* Editor Content Area with Dedicated Vertical Scrollbar */}
-      <div className="relative group/editor">
+      <div className={`relative group/editor ${isFullscreen ? 'flex-1 min-h-0 bg-white flex flex-col overflow-hidden' : ''}`}>
         {isCodeView ? (
           <textarea
             value={codeValue}
@@ -1548,12 +2198,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               onChange(e.target.value);
             }}
             rows={14}
-            className="w-full p-4 font-mono text-xs text-green-400 bg-gray-900 leading-relaxed focus:outline-none resize-y editor-workspace-scroll"
+            className={`w-full p-4 font-mono text-xs text-green-400 bg-gray-900 leading-relaxed focus:outline-none resize-y editor-workspace-scroll ${
+              isFullscreen ? 'flex-1 h-full max-h-none' : ''
+            }`}
             placeholder="HTML 소스 코드를 직접 편집할 수 있습니다..."
             style={{
-              minHeight,
-              maxHeight: workspaceHeight === 'none' ? undefined : workspaceHeight,
-              overflowY: workspaceHeight === 'none' ? 'visible' : 'auto',
+              minHeight: isFullscreen ? '100%' : minHeight,
+              maxHeight: isFullscreen ? undefined : workspaceHeight === 'none' ? undefined : workspaceHeight,
+              overflowY: 'auto',
             }}
           />
         ) : (
@@ -1567,11 +2219,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             onScroll={checkScrollable}
             onClick={handleEditorClick}
             onKeyDown={handleEditorKeyDown}
-            className="p-4 text-xs text-gray-800 leading-relaxed focus:outline-none editor-workspace-scroll prose prose-sm max-w-none [&_img]:transition-all [&_img:hover]:ring-2 [&_img:hover]:ring-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_td]:border [&_td]:border-gray-300 [&_td]:p-2"
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+            className={`p-4 text-xs text-gray-800 leading-relaxed focus:outline-none editor-workspace-scroll prose prose-sm max-w-none [&_img]:transition-all [&_img:hover]:ring-2 [&_img:hover]:ring-blue-400 [&_table]:border-collapse [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 ${
+              isFullscreen ? 'flex-1 h-full max-h-none overflow-y-auto' : ''
+            }`}
             style={{
-              minHeight,
-              maxHeight: workspaceHeight === 'none' ? undefined : workspaceHeight,
-              overflowY: workspaceHeight === 'none' ? 'visible' : 'auto',
+              minHeight: isFullscreen ? '100%' : minHeight,
+              maxHeight: isFullscreen ? undefined : workspaceHeight === 'none' ? undefined : workspaceHeight,
+              overflowY: isFullscreen ? 'auto' : workspaceHeight === 'none' ? 'visible' : 'auto',
             }}
             data-placeholder={placeholder}
           />

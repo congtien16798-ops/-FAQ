@@ -430,8 +430,8 @@ function MainApp() {
                     targetFaqId={targetFaqId}
                     onClearTargetFaqId={handleClearTargetFaqId}
                     documents={documents}
-                    onNavigateToDownloads={(cat) => {
-                      setActiveTab('downloads');
+                    onNavigateToDownloads={(cat, docId) => {
+                      handleNavigateTabWithItem('downloads', docId);
                       if (cat) {
                         setSelectedCategory(cat as any);
                       }

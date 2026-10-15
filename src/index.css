@@ -339,3 +339,26 @@ html {
   background: #1a3b6b;
 }
 
+/* Hide admin-only delete buttons in published content */
+.prose .btn-delete-inline-file,
+.prose .btn-delete-doc-shortcut,
+.content-body .btn-delete-inline-file,
+.content-body .btn-delete-doc-shortcut,
+.faq-content .btn-delete-inline-file,
+.faq-content .btn-delete-doc-shortcut {
+  display: none !important;
+}
+
+/* Editor highlight for clickable cards */
+[contenteditable] .faq-inline-file-box,
+[contenteditable] .faq-doc-shortcut-card {
+  position: relative;
+  transition: all 0.15s ease-in-out;
+}
+
+[contenteditable] .faq-inline-file-box:hover,
+[contenteditable] .faq-doc-shortcut-card:hover {
+  outline: 2px dashed #1a3b6b;
+  outline-offset: 2px;
+}
+
