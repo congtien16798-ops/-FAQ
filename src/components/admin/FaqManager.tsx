@@ -1418,8 +1418,8 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                   value={content}
                   onChange={setContent}
                   placeholder="답변 내용을 자유롭게 작성하세요..."
-                  minHeight={isModalExpanded ? '380px' : '280px'}
-                  maxHeight={isModalExpanded ? '600px' : '450px'}
+                  minHeight={isModalExpanded ? '520px' : '280px'}
+                  maxHeight={isModalExpanded ? '720px' : '450px'}
                   documents={documents}
                 />
               </div>

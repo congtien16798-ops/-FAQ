@@ -339,26 +339,61 @@ html {
   background: #1a3b6b;
 }
 
-/* Hide admin-only delete buttons in published content */
+/* Hide admin-only controls and action bars in published student content */
+.prose .block-drag-handle,
+.prose .box-action-bar,
+.prose .table-action-bar,
 .prose .btn-delete-inline-file,
 .prose .btn-delete-doc-shortcut,
+.prose .btn-delete-callout-box,
+.prose .btn-delete-table,
+.prose .btn-block-move-up,
+.prose .btn-block-move-down,
+.content-body .block-drag-handle,
+.content-body .box-action-bar,
+.content-body .table-action-bar,
 .content-body .btn-delete-inline-file,
 .content-body .btn-delete-doc-shortcut,
+.content-body .btn-delete-callout-box,
+.content-body .btn-delete-table,
+.content-body .btn-block-move-up,
+.content-body .btn-block-move-down,
+.faq-content .block-drag-handle,
+.faq-content .box-action-bar,
+.faq-content .table-action-bar,
 .faq-content .btn-delete-inline-file,
-.faq-content .btn-delete-doc-shortcut {
+.faq-content .btn-delete-doc-shortcut,
+.faq-content .btn-delete-callout-box,
+.faq-content .btn-delete-table,
+.faq-content .btn-block-move-up,
+.faq-content .btn-block-move-down {
   display: none !important;
 }
 
-/* Editor highlight for clickable cards */
+/* Editor highlight for clickable and draggable blocks */
 [contenteditable] .faq-inline-file-box,
-[contenteditable] .faq-doc-shortcut-card {
+[contenteditable] .faq-doc-shortcut-card,
+[contenteditable] .faq-callout-box,
+[contenteditable] .table-responsive {
   position: relative;
   transition: all 0.15s ease-in-out;
 }
 
 [contenteditable] .faq-inline-file-box:hover,
-[contenteditable] .faq-doc-shortcut-card:hover {
-  outline: 2px dashed #1a3b6b;
+[contenteditable] .faq-doc-shortcut-card:hover,
+[contenteditable] .faq-callout-box:hover,
+[contenteditable] .table-responsive:hover {
+  outline: 1.5px dashed #3B82F6;
   outline-offset: 2px;
+}
+
+[contenteditable] .block-selected,
+[contenteditable] .faq-inline-file-box.block-selected,
+[contenteditable] .faq-doc-shortcut-card.block-selected,
+[contenteditable] .faq-callout-box.block-selected,
+[contenteditable] .table-responsive.block-selected {
+  outline: 2.5px solid #2563EB !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15) !important;
 }
 

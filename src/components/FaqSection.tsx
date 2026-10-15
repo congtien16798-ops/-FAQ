@@ -568,7 +568,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                           e.preventDefault();
                           const docId = downloadDocBtn.getAttribute('data-doc-id');
                           if (docId) {
-                            const foundDoc = documents.find((d) => d.id === docId);
+                            const foundDoc = (documents || []).find((d) => d.id === docId);
                             if (foundDoc) {
                               triggerDocumentDownload(foundDoc);
                               return;
@@ -582,7 +582,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                           const parentCard = navDocBtn.closest('.faq-doc-shortcut-card');
                           const docId = parentCard?.getAttribute('data-doc-id');
                           if (docId && onNavigateToDownloads) {
-                            const foundDoc = documents.find((d) => d.id === docId);
+                            const foundDoc = (documents || []).find((d) => d.id === docId);
                             if (foundDoc) {
                               onNavigateToDownloads(foundDoc.category, foundDoc.id);
                               return;
@@ -658,7 +658,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
 
                     {/* 7. 관련 행정 서식 자료실 연동 (Requirement 7 - Auto-translated) */}
                     {faq.relatedDocumentIds && faq.relatedDocumentIds.length > 0 && (() => {
-                      const linkedDocs = documents.filter((d) => faq.relatedDocumentIds?.includes(d.id));
+                      const linkedDocs = (documents || []).filter((d) => faq.relatedDocumentIds?.includes(d.id));
                       if (linkedDocs.length === 0) return null;
                       return (
                         <div className="mt-4 p-3.5 bg-indigo-50/50 rounded-lg border border-indigo-200 shadow-2xs">

@@ -332,22 +332,36 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   // Block Movement Helper (One-click Move Up / Move Down for boxes, file boxes, doc cards, tables)
   const moveElement = (el: HTMLElement, direction: 'up' | 'down') => {
     if (!el || !el.parentElement) return;
-    const parent = el.parentElement;
+    let targetEl = el;
+    if (targetEl.tagName.toLowerCase() === 'table' && targetEl.closest('.table-responsive')) {
+      targetEl = targetEl.closest('.table-responsive') as HTMLElement;
+    }
+    const parent = targetEl.parentElement;
+    if (!parent) return;
+
     if (direction === 'up') {
-      const prev = el.previousElementSibling;
+      let prev = targetEl.previousElementSibling;
+      // Skip empty blank lines so user sees noticeable movement
+      while (prev && prev.tagName.toLowerCase() === 'p' && !prev.textContent?.trim() && !prev.querySelector('img, a, span, table')) {
+        prev = prev.previousElementSibling;
+      }
       if (prev) {
-        parent.insertBefore(el, prev);
+        parent.insertBefore(targetEl, prev);
       }
     } else {
-      const next = el.nextElementSibling;
+      let next = targetEl.nextElementSibling;
+      while (next && next.tagName.toLowerCase() === 'p' && !next.textContent?.trim() && !next.querySelector('img, a, span, table')) {
+        next = next.nextElementSibling;
+      }
       if (next) {
         if (next.nextElementSibling) {
-          parent.insertBefore(el, next.nextElementSibling);
+          parent.insertBefore(targetEl, next.nextElementSibling);
         } else {
-          parent.appendChild(el);
+          parent.appendChild(targetEl);
         }
       }
     }
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     handleEditorInput();
   };
 
@@ -357,15 +371,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleDragStart = (e: React.DragEvent) => {
     const target = e.target as HTMLElement;
     // Find closest movable block (box, file box, doc card, table container)
-    const block = target.closest(
+    let block = target.closest(
       '.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table'
     ) as HTMLElement | null;
+
+    if (block?.tagName.toLowerCase() === 'table' && block.closest('.table-responsive')) {
+      block = block.closest('.table-responsive') as HTMLElement;
+    }
+
     if (block && editorRef.current?.contains(block)) {
       draggedBlockRef.current = block;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', 'rte-draggable-block');
-      block.style.opacity = '0.4';
-      block.style.outline = '2px dashed #2563EB';
+      block.style.opacity = '0.35';
+      block.style.outline = '2.5px dashed #2563EB';
     }
   };
 
@@ -378,11 +397,20 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!editorRef.current?.contains(target)) return;
 
     // Find candidate drop target block
-    const targetBlock = target.closest(
+    let targetBlock = target.closest(
       '.faq-callout-box, .faq-inline-file-box, .faq-doc-shortcut-card, .table-responsive, table, p, h1, h2, h3, h4, ul, ol, blockquote'
     ) as HTMLElement | null;
 
-    if (targetBlock && targetBlock !== draggedBlockRef.current && editorRef.current.contains(targetBlock)) {
+    if (targetBlock?.tagName.toLowerCase() === 'table' && targetBlock.closest('.table-responsive')) {
+      targetBlock = targetBlock.closest('.table-responsive') as HTMLElement;
+    }
+
+    if (
+      targetBlock &&
+      targetBlock !== draggedBlockRef.current &&
+      !draggedBlockRef.current.contains(targetBlock) &&
+      editorRef.current.contains(targetBlock)
+    ) {
       const rect = targetBlock.getBoundingClientRect();
       const isTop = e.clientY < rect.top + rect.height / 2;
 
@@ -391,7 +419,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         indicator = document.createElement('div');
         indicator.id = 'rte-drop-indicator';
         indicator.style.cssText =
-          'height: 4px; background: #2563EB; border-radius: 2px; margin: 6px 0; box-shadow: 0 0 8px rgba(37,99,235,0.7); pointer-events: none; transition: all 0.15s ease;';
+          'height: 4px; background: #2563EB; border-radius: 2px; margin: 6px 0; box-shadow: 0 0 10px rgba(37,99,235,0.8); pointer-events: none; transition: all 0.1s ease;';
       }
 
       if (isTop) {
@@ -434,6 +462,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       dragged.style.opacity = '';
       dragged.style.outline = '';
       draggedBlockRef.current = null;
+      dragged.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       handleEditorInput();
     } else {
       indicator?.remove();
@@ -1102,9 +1131,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       return;
     }
 
+    // Helper to clear block selection outlines
+    if (editorRef.current) {
+      editorRef.current.querySelectorAll('.block-selected, .cell-selected').forEach((el) => {
+        el.classList.remove('block-selected', 'cell-selected');
+      });
+    }
+
     // 2. Inline File Download Box selected
     const fileBox = target.closest('.faq-inline-file-box') as HTMLElement | null;
     if (fileBox) {
+      fileBox.classList.add('block-selected');
       setSelectedFileBoxEl(fileBox);
       setSelectedDocCardEl(null);
       setSelectedBoxEl(null);
@@ -1118,6 +1155,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     // 3. Library Document Shortcut Card selected
     const docCard = target.closest('.faq-doc-shortcut-card') as HTMLElement | null;
     if (docCard) {
+      docCard.classList.add('block-selected');
       setSelectedDocCardEl(docCard);
       setSelectedFileBoxEl(null);
       setSelectedBoxEl(null);
@@ -1131,6 +1169,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     // Check if clicked a callout box
     const box = target.closest('.faq-callout-box') as HTMLElement | null;
     if (box) {
+      box.classList.add('block-selected');
       setSelectedBoxEl(box);
       setSelectedFileBoxEl(null);
       setSelectedDocCardEl(null);
@@ -1167,14 +1206,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const cell = target.closest('td, th') as HTMLTableCellElement | null;
     const table = target.closest('table') as HTMLTableElement | null;
 
-    if (editorRef.current) {
-      editorRef.current.querySelectorAll('.cell-selected').forEach((el) => {
-        el.classList.remove('cell-selected');
-      });
-    }
-
     if (cell && table) {
       cell.classList.add('cell-selected');
+      const tableContainer = (table.closest('.table-responsive') as HTMLElement) || table;
+      tableContainer.classList.add('block-selected');
       setSelectedCell(cell);
       setSelectedTable(table);
       setSelectedBoxEl(null);
