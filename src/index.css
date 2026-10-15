@@ -339,34 +339,64 @@ html {
   background: #1a3b6b;
 }
 
-/* Hide admin-only controls and action bars in published student content */
-.prose .block-drag-handle,
-.prose .box-action-bar,
-.prose .table-action-bar,
-.prose .btn-delete-inline-file,
-.prose .btn-delete-doc-shortcut,
-.prose .btn-delete-callout-box,
-.prose .btn-delete-table,
-.prose .btn-block-move-up,
-.prose .btn-block-move-down,
-.content-body .block-drag-handle,
-.content-body .box-action-bar,
-.content-body .table-action-bar,
-.content-body .btn-delete-inline-file,
-.content-body .btn-delete-doc-shortcut,
-.content-body .btn-delete-callout-box,
-.content-body .btn-delete-table,
-.content-body .btn-block-move-up,
-.content-body .btn-block-move-down,
-.faq-content .block-drag-handle,
-.faq-content .box-action-bar,
-.faq-content .table-action-bar,
-.faq-content .btn-delete-inline-file,
-.faq-content .btn-delete-doc-shortcut,
-.faq-content .btn-delete-callout-box,
-.faq-content .btn-delete-table,
-.faq-content .btn-block-move-up,
-.faq-content .btn-block-move-down {
+/* Ensure admin-only controls and action bars are ALWAYS VISIBLE and interactive inside the editor */
+[contenteditable] .block-drag-handle,
+.rte-editor .block-drag-handle {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+[contenteditable] .box-action-bar,
+.rte-editor .box-action-bar,
+[contenteditable] .table-action-bar,
+.rte-editor .table-action-bar {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+[contenteditable] .btn-delete-inline-file,
+.rte-editor .btn-delete-inline-file,
+[contenteditable] .btn-delete-doc-shortcut,
+.rte-editor .btn-delete-doc-shortcut,
+[contenteditable] .btn-delete-callout-box,
+.rte-editor .btn-delete-callout-box,
+[contenteditable] .btn-delete-table,
+.rte-editor .btn-delete-table {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+[contenteditable] .btn-block-move-up,
+.rte-editor .btn-block-move-up,
+[contenteditable] .btn-block-move-down,
+.rte-editor .btn-block-move-down {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Hide admin-only controls and action bars ONLY in published student view */
+.faq-student-view .block-drag-handle,
+.faq-student-view .box-action-bar,
+.faq-student-view .table-action-bar,
+.faq-student-view .btn-delete-inline-file,
+.faq-student-view .btn-delete-doc-shortcut,
+.faq-student-view .btn-delete-callout-box,
+.faq-student-view .btn-delete-table,
+.faq-student-view .btn-block-move-up,
+.faq-student-view .btn-block-move-down,
+.student-article-body .block-drag-handle,
+.student-article-body .box-action-bar,
+.student-article-body .table-action-bar,
+.student-article-body .btn-delete-inline-file,
+.student-article-body .btn-delete-doc-shortcut,
+.student-article-body .btn-delete-callout-box,
+.student-article-body .btn-delete-table,
+.student-article-body .btn-block-move-up,
+.student-article-body .btn-block-move-down {
   display: none !important;
 }
 
@@ -377,6 +407,7 @@ html {
 [contenteditable] .table-responsive {
   position: relative;
   transition: all 0.15s ease-in-out;
+  cursor: pointer;
 }
 
 [contenteditable] .faq-inline-file-box:hover,
@@ -394,6 +425,16 @@ html {
 [contenteditable] .table-responsive.block-selected {
   outline: 2.5px solid #2563EB !important;
   outline-offset: 2px !important;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.18) !important;
 }
+
+.block-drag-handle {
+  user-select: none;
+  cursor: grab !important;
+}
+
+.block-drag-handle:active {
+  cursor: grabbing !important;
+}
+
 

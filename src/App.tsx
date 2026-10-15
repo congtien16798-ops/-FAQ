@@ -124,7 +124,8 @@ function MainApp() {
   // Safe reconciliation: never resurrect deleted items, and prefer live Firestore items
   function reconcileWithLocal<T extends { id: string }>(
     remoteItems: T[],
-    localKey: string
+    localKey: string,
+    defaultFallback: T[] = []
   ): T[] {
     const cleanRemote = remoteItems.filter((r) => r && r.id && !isItemDeleted(r.id));
     if (cleanRemote.length > 0) {
@@ -132,39 +133,45 @@ function MainApp() {
     }
     try {
       const cachedStr = localStorage.getItem(localKey);
-      if (!cachedStr) return [];
-      const localItems = JSON.parse(cachedStr) as T[];
-      if (!Array.isArray(localItems)) return [];
-      return localItems.filter((item) => item && item.id && !isItemDeleted(item.id));
+      if (cachedStr) {
+        const localItems = JSON.parse(cachedStr) as T[];
+        if (Array.isArray(localItems)) {
+          const filtered = localItems.filter((item) => item && item.id && !isItemDeleted(item.id));
+          if (filtered.length > 0) return filtered;
+        }
+      }
     } catch {
-      return [];
+      // ignore
     }
+    return defaultFallback.filter((item) => item && item.id && !isItemDeleted(item.id));
   }
 
-  // FAQs State: defaults to local cache or clean empty array
+  // FAQs State: defaults to local cache or clean initial FAQs
   const [faqs, setFaqs] = useState<FaqItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_FAQS_KEY);
       if (cached) {
-        return (JSON.parse(cached) as FaqItem[]).filter((f) => f && f.id && !isItemDeleted(f.id));
+        const parsed = (JSON.parse(cached) as FaqItem[]).filter((f) => f && f.id && !isItemDeleted(f.id));
+        if (parsed.length > 0) return parsed;
       }
-      return [];
     } catch {
-      return [];
+      // ignore
     }
+    return initialFaqs.filter((f) => !isItemDeleted(f.id));
   });
 
-  // Documents State: defaults to local cache or clean empty array
+  // Documents State: defaults to local cache or clean initial documents
   const [documents, setDocuments] = useState<DocumentItem[]>(() => {
     try {
       const cached = localStorage.getItem(LOCAL_DOCS_KEY);
       if (cached) {
-        return (JSON.parse(cached) as DocumentItem[]).filter((d) => d && d.id && !isItemDeleted(d.id));
+        const parsed = (JSON.parse(cached) as DocumentItem[]).filter((d) => d && d.id && !isItemDeleted(d.id));
+        if (parsed.length > 0) return parsed;
       }
-      return [];
     } catch {
-      return [];
+      // ignore
     }
+    return initialDocuments.filter((d) => !isItemDeleted(d.id));
   });
 
   // Inquiries State: defaults to local cache or clean empty array
@@ -210,7 +217,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as FaqItem);
       });
 
-      const reconciled = reconcileWithLocal(list, LOCAL_FAQS_KEY);
+      const reconciled = reconcileWithLocal(list, LOCAL_FAQS_KEY, initialFaqs);
 
       reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
@@ -238,7 +245,7 @@ function MainApp() {
         list.push({ ...data, id: data.id || docSnap.id } as DocumentItem);
       });
 
-      const reconciled = reconcileWithLocal(list, LOCAL_DOCS_KEY);
+      const reconciled = reconcileWithLocal(list, LOCAL_DOCS_KEY, initialDocuments);
 
       reconciled.sort((a, b) => {
         if (a.order !== undefined && b.order !== undefined) return a.order - b.order;

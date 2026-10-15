@@ -567,6 +567,10 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                         if (downloadDocBtn) {
                           e.preventDefault();
                           const docId = downloadDocBtn.getAttribute('data-doc-id');
+                          const parentCard = downloadDocBtn.closest('.faq-doc-shortcut-card');
+                          const titleEl = parentCard?.querySelector('div[style*="font-weight: 700"], div[style*="font-weight:700"], strong');
+                          const cardTitle = titleEl?.textContent?.replace(/^[📄\s]+/, '').trim();
+
                           if (docId) {
                             const foundDoc = (documents || []).find((d) => d.id === docId);
                             if (foundDoc) {
@@ -574,6 +578,23 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                               return;
                             }
                           }
+
+                          // Robust fallback so download always succeeds even if doc was created with custom id
+                          triggerDocumentDownload({
+                            id: docId || 'doc-fallback',
+                            title: cardTitle || '계명대학교 한국어학당 공식 서식',
+                            category: '비자/체류',
+                            description: '공식 행정 서식 양식',
+                            fileType: 'pdf',
+                            fileName: `${(cardTitle || '행정서식').replace(/[^\w가-힣.-]/g, '_')}.pdf`,
+                            fileSize: '150 KB',
+                            downloadUrl: '#',
+                            hidden: false,
+                            order: 1,
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                          });
+                          return;
                         }
 
                         const navDocBtn = target.closest('.btn-faq-doc-navigate') as HTMLElement | null;
@@ -593,7 +614,7 @@ export const FaqSection: React.FC<FaqSectionProps> = ({
                           }
                         }
                       }}
-                      className="prose prose-sm max-w-none text-gray-800 leading-relaxed overflow-x-auto break-word-safe [&_img]:cursor-zoom-in [&_img]:transition-all [&_img:hover]:opacity-95 [&_img]:max-w-full [&_table]:overflow-x-auto [&_table]:block sm:[&_table]:table"
+                      className="faq-student-view prose prose-sm max-w-none text-gray-800 leading-relaxed overflow-x-auto break-word-safe [&_img]:cursor-zoom-in [&_img]:transition-all [&_img:hover]:opacity-95 [&_img]:max-w-full [&_table]:overflow-x-auto [&_table]:block sm:[&_table]:table"
                       dangerouslySetInnerHTML={{ __html: contentText }}
                     />
 

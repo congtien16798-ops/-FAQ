@@ -354,11 +354,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         next = next.nextElementSibling;
       }
       if (next) {
-        if (next.nextElementSibling) {
-          parent.insertBefore(targetEl, next.nextElementSibling);
-        } else {
-          parent.appendChild(targetEl);
-        }
+        parent.insertBefore(targetEl, next.nextSibling);
       }
     }
     targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -646,14 +642,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     const boxHtml = `
       <div class="faq-callout-box" data-box-type="${boxPreset}" draggable="true" style="background-color: ${boxBgColor}; ${borderCss} border-radius: ${boxRadius}; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; transition: all 0.2s ease; position: relative;">
-        <div class="box-action-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; user-select: none;">
-          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #64748B; background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px; cursor: grab;">
+        <div class="box-action-bar" contenteditable="false" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; user-select: none;">
+          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #475569; background: #E2E8F0; padding: 2px 8px; border-radius: 4px; cursor: grab;">
             <span>⠿ 드래그 이동</span>
-            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▲</button>
-            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▼</button>
+            <span style="color: #94A3B8; margin: 0 1px;">|</span>
+            <button type="button" class="btn-block-move-up" title="본문 위쪽으로 한 칸 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 5px; font-size: 10px; font-weight: bold;">▲ 위로</button>
+            <button type="button" class="btn-block-move-down" title="본문 아래쪽으로 한 칸 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 5px; font-size: 10px; font-weight: bold;">▼ 아래로</button>
           </div>
-          <button type="button" class="btn-delete-callout-box" title="박스 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-            <span>삭제 ✕</span>
+          <button type="button" class="btn-delete-callout-box" title="박스 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+            <span>박스 삭제 ✕</span>
           </button>
         </div>
         ${boxTitle ? `<div style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: ${boxBorderColor}; margin-bottom: 6px; font-size: 13.5px;">${boxIcon ? `<span>${boxIcon}</span>` : ''}<span>${boxTitle}</span></div>` : ''}
@@ -697,10 +694,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const fileBoxHtml = `
       <div class="faq-inline-file-box" data-file-name="${pendingFileName}" data-file-url="${pendingFileDataUrl}" draggable="true" style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin: 12px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-family: inherit; position: relative;">
         <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-          <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #64748B; background: #E2E8F0; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
-            <span>⠿</span>
-            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▲</button>
-            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #475569; padding: 0 2px; font-size: 10px;">▼</button>
+          <div class="block-drag-handle" contenteditable="false" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #475569; background: #E2E8F0; padding: 2px 7px; border-radius: 4px; cursor: grab; user-select: none;">
+            <span>⠿ 이동</span>
+            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 4px; font-size: 10px; font-weight: bold;">▲</button>
+            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 4px; font-size: 10px; font-weight: bold;">▼</button>
           </div>
           <span style="background-color: ${badgeBg}; color: #ffffff; font-weight: bold; font-size: 10px; padding: 3px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${pendingFileType}</span>
           <div style="min-width: 0;">
@@ -708,11 +705,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <div style="font-size: 11px; color: #64748B;">파일 크기: ${pendingFileSize}</div>
           </div>
         </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
+        <div contenteditable="false" style="display: flex; align-items: center; gap: 6px;">
           <a href="${pendingFileDataUrl}" download="${pendingFileName}" style="background-color: #1A3B6B; color: #ffffff; font-size: 11.5px; font-weight: 600; padding: 6px 12px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;">
             <span>다운로드</span>
           </a>
-          <button type="button" class="btn-delete-inline-file" title="파일 다운로드 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; padding: 5px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+          <button type="button" class="btn-delete-inline-file" title="파일 다운로드 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 5px; padding: 5px 9px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
             <span>삭제 ✕</span>
           </button>
         </div>
@@ -736,12 +733,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     const shortcutHtml = `
       <div class="faq-doc-shortcut-card" data-doc-id="${doc.id}" draggable="true" style="background-color: #F0F5FA; border: 1.5px solid #1A3B6B; border-radius: 8px; padding: 14px 18px; margin: 14px 0; display: flex; flex-direction: column; gap: 8px; font-family: inherit; position: relative;">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <div contenteditable="false" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: #1A3B6B; background: #DBEAFE; padding: 2px 6px; border-radius: 4px; cursor: grab; user-select: none;">
-              <span>⠿</span>
-              <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▲</button>
-              <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #1E40AF; padding: 0 2px; font-size: 10px;">▼</button>
+            <div class="block-drag-handle" draggable="true" title="잡고 드래그하여 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #1A3B6B; background: #DBEAFE; padding: 2px 7px; border-radius: 4px; cursor: grab; user-select: none;">
+              <span>⠿ 이동</span>
+              <button type="button" class="btn-block-move-up" title="위로 이동" style="background: white; border: 1px solid #93C5FD; border-radius: 3px; cursor: pointer; color: #1E40AF; padding: 1px 4px; font-size: 10px; font-weight: bold;">▲</button>
+              <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: white; border: 1px solid #93C5FD; border-radius: 3px; cursor: pointer; color: #1E40AF; padding: 1px 4px; font-size: 10px; font-weight: bold;">▼</button>
             </div>
             <span style="background-color: #1A3B6B; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 4px;">서식 및 자료실</span>
             <span style="background-color: ${typeBadgeBg}; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">${doc.fileType}</span>
@@ -749,7 +746,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           </div>
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 11px; color: #64748B; font-weight: 500;">용량: ${doc.fileSize}</span>
-            <button type="button" class="btn-delete-doc-shortcut" data-doc-id="${doc.id}" title="서식자료실 연동 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 3px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+            <button type="button" class="btn-delete-doc-shortcut" data-doc-id="${doc.id}" title="서식자료실 연동 카드 삭제" style="background-color: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
               <span>연동 삭제 ✕</span>
             </button>
           </div>
@@ -759,7 +756,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <div style="font-weight: 700; font-size: 13.5px; color: #0F254A;">📄 ${doc.title}</div>
             ${doc.description ? `<div style="font-size: 11.5px; color: #475569; margin-top: 2px;">${doc.description}</div>` : ''}
           </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <div contenteditable="false" style="display: flex; align-items: center; gap: 6px;">
             <button type="button" class="btn-faq-doc-download" data-doc-id="${doc.id}" style="background-color: #1A3B6B; color: #ffffff; font-size: 12px; font-weight: bold; padding: 6px 14px; border-radius: 5px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
               <span>즉시 다운로드</span>
             </button>
@@ -903,14 +900,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     const tableHtml = `
       <div class="table-responsive" draggable="true" style="overflow-x: auto; margin: 14px 0; position: relative;">
-        <div class="table-action-bar" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; user-select: none;">
-          <div class="block-drag-handle" draggable="true" title="표를 잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #64748B; background: #F1F5F9; padding: 2px 6px; border-radius: 4px; cursor: grab;">
-            <span>⠿ 표 이동</span>
-            <button type="button" class="btn-block-move-up" title="위로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▲</button>
-            <button type="button" class="btn-block-move-down" title="아래로 이동" style="background: none; border: none; cursor: pointer; color: #64748B; padding: 0 2px; font-size: 10px;">▼</button>
+        <div class="table-action-bar" contenteditable="false" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; user-select: none;">
+          <div class="block-drag-handle" draggable="true" title="표를 잡고 드래그하여 원하는 위치로 이동" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #475569; background: #F1F5F9; border: 1px solid #CBD5E1; padding: 2px 8px; border-radius: 4px; cursor: grab;">
+            <span>⠿ 표 드래그 이동</span>
+            <span style="color: #CBD5E1; margin: 0 1px;">|</span>
+            <button type="button" class="btn-block-move-up" title="표를 위로 한 칸 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 5px; font-size: 10px; font-weight: bold;">▲ 위로</button>
+            <button type="button" class="btn-block-move-down" title="표를 아래로 한 칸 이동" style="background: white; border: 1px solid #CBD5E1; border-radius: 3px; cursor: pointer; color: #1E293B; padding: 1px 5px; font-size: 10px; font-weight: bold;">▼ 아래로</button>
           </div>
-          <button type="button" class="btn-delete-table" title="표 전체 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 7px; font-size: 10.5px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
-            <span>표 삭제 ✕</span>
+          <button type="button" class="btn-delete-table" title="표 전체 삭제" style="background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; gap: 2px;">
+            <span>표 전체 삭제 ✕</span>
           </button>
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid ${borderColor}; background-color: #ffffff;">
@@ -1772,19 +1770,19 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <Code className="w-3.5 h-3.5" />
         </button>
 
-        {/* Fullscreen / Expand Editor Mode (Requirement 5) */}
+        {/* Fullscreen / Expand Editor Mode (Requirement 4) */}
         <button
           type="button"
           onClick={() => setIsFullscreen((prev) => !prev)}
-          className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+          className={`px-3 py-1 rounded text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-2xs ${
             isFullscreen
-              ? 'bg-amber-400 text-slate-900 shadow-xs'
-              : 'bg-white hover:bg-gray-200 text-gray-700 border border-gray-300'
+              ? 'bg-amber-400 text-slate-900 shadow-md ring-2 ring-amber-300'
+              : 'bg-blue-50 hover:bg-blue-100 text-[#1A3B6B] border border-blue-300'
           }`}
-          title={isFullscreen ? '창 축소 / 원래 화면으로 복귀 (ESC)' : '문서 편집 창 전체 화면 확장 (더 큰 화면에서 편집)'}
+          title={isFullscreen ? '창 축소 / 원래 화면으로 복귀 (ESC)' : '문서 편집 창 전체 화면 확장 (더 큰 화면에서 작성)'}
         >
-          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
-          <span>{isFullscreen ? '창 축소' : '창 확장'}</span>
+          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-slate-900" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
+          <span>{isFullscreen ? '창 축소' : '편집창 전체 확장 ⛶'}</span>
         </button>
       </div>
 

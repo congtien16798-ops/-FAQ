@@ -485,6 +485,18 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
       }
     }
 
+    // Extract any relatedDocumentIds that might be inside content's data-doc-id attributes as well
+    const dom = document.createElement('div');
+    dom.innerHTML = content;
+    const inlineDocIds: string[] = [];
+    dom.querySelectorAll('[data-doc-id]').forEach((el) => {
+      const dId = el.getAttribute('data-doc-id');
+      if (dId && !inlineDocIds.includes(dId)) {
+        inlineDocIds.push(dId);
+      }
+    });
+    const combinedDocIds = Array.from(new Set([...relatedDocumentIds, ...inlineDocIds]));
+
     const faqPayload: FaqItem = {
       id,
       category,
@@ -495,7 +507,7 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
       views: editingId ? faqs.find((f) => f.id === editingId)?.views || 100 : 0,
       imageUrl: finalImageUrl || undefined,
       attachments: attachments.length > 0 ? attachments : undefined,
-      relatedDocumentIds: relatedDocumentIds.length > 0 ? relatedDocumentIds : undefined,
+      relatedDocumentIds: combinedDocIds.length > 0 ? combinedDocIds : undefined,
       createdAt: editingId ? faqs.find((f) => f.id === editingId)?.createdAt || timestamp : timestamp,
       updatedAt: timestamp,
       authorId: user?.uid || 'admin',
@@ -1327,15 +1339,19 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {/* Expand / Collapse Button (Requirement 5) */}
+                {/* Expand / Collapse Button (Requirement 4) */}
                 <button
                   type="button"
                   onClick={() => setIsModalExpanded((prev) => !prev)}
-                  className="px-2.5 py-1.5 rounded text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 flex items-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
-                  title={isModalExpanded ? '기본 창 크기로 축소' : '더 큰 화면에서 작성하기 (편집창 전체 확장)'}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-xs ${
+                    isModalExpanded
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 ring-1 ring-amber-300'
+                      : 'bg-indigo-50 hover:bg-indigo-100 text-[#1A3B6B] border border-indigo-200'
+                  }`}
+                  title={isModalExpanded ? '기본 창 크기로 축소' : '더 큰 화면에서 작성하기 (문서 편집 창 전체 확장)'}
                 >
-                  {isModalExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
-                  <span className="hidden sm:inline">{isModalExpanded ? '창 축소' : '편집창 전체 확장'}</span>
+                  {isModalExpanded ? <Minimize2 className="w-3.5 h-3.5 text-amber-800" /> : <Maximize2 className="w-3.5 h-3.5 text-[#1A3B6B]" />}
+                  <span>{isModalExpanded ? '기본 창 크기로 축소' : '문서 편집 창 전체 확장 ⛶'}</span>
                 </button>
                 <button
                   type="button"
@@ -1450,84 +1466,97 @@ export const FaqManager: React.FC<FaqManagerProps> = ({ faqs, setFaqs, documents
                       value={docSearchQuery}
                       onChange={(e) => setDocSearchQuery(e.target.value)}
                       placeholder="연동할 행정 서식명, 구분, 파일명 검색 (예: D-4, 체류, 시간제취업)..."
-                      className="w-full pl-8 pr-3 py-1.5 bg-white rounded border border-indigo-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full pl-8 pr-8 py-1.5 bg-white rounded border border-indigo-200 text-xs focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     {docSearchQuery && (
                       <button
                         type="button"
                         onClick={() => setDocSearchQuery('')}
-                        className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer"
+                        className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer font-bold"
                       >
                         ✕
                       </button>
                     )}
                   </div>
 
-                  {/* Search Results Dropdown/Box when searching */}
-                  {docSearchQuery.trim() && (
-                    <div className="max-h-48 overflow-y-auto bg-white border border-indigo-200 rounded-md p-2 space-y-1 shadow-sm">
-                      <div className="text-[11px] font-semibold text-gray-500 px-1 pb-1 border-b border-gray-100 flex items-center justify-between">
-                        <span>검색된 행정 서식 ({searchedDocuments.length}건)</span>
-                        <span className="text-[10px] text-indigo-600">클릭하여 연동 추가</span>
+                  {/* Available Documents List - Always displayed so admin can easily browse and link */}
+                  <div className="max-h-56 overflow-y-auto bg-white border border-indigo-200 rounded-md p-2 space-y-1.5 shadow-2xs">
+                    <div className="text-[11px] font-semibold text-indigo-950 px-1 pb-1 border-b border-indigo-100 flex items-center justify-between">
+                      <span>
+                        등록된 행정 서식 목록 ({searchedDocuments.length}건)
+                        {docSearchQuery && <span className="text-indigo-600 font-normal ml-1">· 검색 필터 적용 중</span>}
+                      </span>
+                      <span className="text-[10px] text-indigo-600 font-medium hidden sm:inline">
+                        '+ 연동 추가' 시 학생 화면에 바로가기 카드가 자동 노출됩니다
+                      </span>
+                    </div>
+                    {searchedDocuments.length === 0 ? (
+                      <div className="py-4 text-center text-gray-400 text-xs">
+                        {docSearchQuery ? `'${docSearchQuery}'와(과) 일치하는 행정 서식이 없습니다.` : '현재 등록된 행정 서식이 없습니다.'}
                       </div>
-                      {searchedDocuments.length === 0 ? (
-                        <div className="py-3 text-center text-gray-400 text-xs">
-                          일치하는 행정 서식이 없습니다.
-                        </div>
-                      ) : (
-                        searchedDocuments.map((doc) => {
-                          const isLinked = relatedDocumentIds.includes(doc.id);
-                          return (
-                            <div
-                              key={doc.id}
-                              className={`p-2 rounded border flex items-center justify-between gap-2 transition-colors ${
-                                isLinked ? 'bg-indigo-50/70 border-indigo-300' : 'bg-gray-50 hover:bg-white border-gray-200'
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase bg-[#1A3B6B]">
-                                    {doc.fileType}
-                                  </span>
-                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
-                                    {doc.category}
-                                  </span>
-                                  <span className="font-semibold text-gray-800 text-xs truncate">
-                                    {doc.title}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] text-gray-500 mt-0.5 truncate">
-                                  용량: {doc.fileSize} {doc.description ? `· ${doc.description}` : ''}
-                                </div>
+                    ) : (
+                      searchedDocuments.map((doc) => {
+                        const isLinked = relatedDocumentIds.includes(doc.id);
+                        return (
+                          <div
+                            key={doc.id}
+                            className={`p-2 rounded border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors ${
+                              isLinked ? 'bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-200' : 'bg-gray-50 hover:bg-white border-gray-200'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold text-white uppercase bg-[#1A3B6B]">
+                                  {doc.fileType}
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-blue-50 text-[#1A3B6B]">
+                                  {doc.category}
+                                </span>
+                                <span className="font-semibold text-gray-900 text-xs truncate">
+                                  📄 {doc.title}
+                                </span>
                               </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleRelatedDocument(doc.id)}
-                                  className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-colors ${
-                                    isLinked
-                                      ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs'
-                                  }`}
-                                >
-                                  {isLinked ? '연동 해제 ✕' : '+ 연동 추가'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleInsertDocToContent(doc)}
-                                  className="px-2 py-1 rounded bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-xs font-medium cursor-pointer"
-                                  title="본문 커서 위치에 바로가기 카드 삽입"
-                                >
-                                  본문 삽입
-                                </button>
+                              <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                용량: {doc.fileSize} {doc.description ? `· ${doc.description}` : ''}
                               </div>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
+
+                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRelatedDocument(doc.id)}
+                                className={`px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-colors ${
+                                  isLinked
+                                    ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs'
+                                }`}
+                                title={isLinked ? '이 FAQ에서 연동 해제' : 'FAQ 하단에 관련 서식 바로가기 카드로 연동'}
+                              >
+                                {isLinked ? '연동 해제 ✕' : '+ 연동 추가'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleInsertDocToContent(doc)}
+                                className="px-2.5 py-1 rounded bg-white hover:bg-gray-100 border border-gray-300 text-[#1A3B6B] text-xs font-semibold cursor-pointer"
+                                title="본문 내용에 이 서식 바로가기 카드 삽입"
+                              >
+                                본문에 카드 삽입
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => triggerDocumentDownload(doc)}
+                                className="px-2 py-1 rounded bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 text-xs font-medium cursor-pointer flex items-center gap-1"
+                                title="서식 파일 즉시 다운로드 테스트"
+                              >
+                                <Download className="w-3 h-3 text-gray-500" />
+                                <span>다운로드</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
 
                 {/* List of Currently Linked Documents */}
